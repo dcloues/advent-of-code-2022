@@ -1,6 +1,7 @@
 mod days;
 
 use days::day1;
+use days::day2;
 use std::env::{args, current_dir};
 use std::error::Error;
 use std::path::PathBuf;
@@ -14,7 +15,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = args().collect();
 
     type Part = dyn Fn(&str) -> Result<String, Box<dyn Error>>;
-    let days: Vec<Vec<Box<Part>>> = vec![vec![Box::new(day1::part1), Box::new(day1::part2)]];
+    let days: Vec<Vec<Box<Part>>> = vec![
+        vec![Box::new(day1::part1), Box::new(day1::part2)],
+        vec![Box::new(day2::part1), Box::new(day2::part2)],
+    ];
 
     match args.len() {
         3 => {
