@@ -10,7 +10,7 @@ fn find_boundary(input: &str, size: usize) -> Result<String, Box<dyn Error>> {
             if chs
                 .iter()
                 .enumerate()
-                .all(|(i, c)| !chs[i+1..].contains(c))
+                .all(|(i, c)| !chs[i + 1..].contains(c))
             {
                 Some((i + size).to_string())
             } else {
