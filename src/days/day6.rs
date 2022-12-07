@@ -9,7 +9,8 @@ fn find_boundary(input: &str, size: usize) -> Result<String, Box<dyn Error>> {
         .find_map(|(i, chs)| {
             if chs
                 .iter()
-                .all(|c| chs.iter().filter(|oc| c == *oc).count() == 1)
+                .enumerate()
+                .all(|(i, c)| !chs[i+1..].contains(c))
             {
                 Some((i + size).to_string())
             } else {
