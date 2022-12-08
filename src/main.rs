@@ -7,6 +7,7 @@ use days::day4;
 use days::day5;
 use days::day6;
 use days::day7;
+use days::day8;
 use std::env::{args, current_dir};
 use std::error::Error;
 use std::path::PathBuf;
@@ -28,6 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         vec![Box::new(day5::part1), Box::new(day5::part2)],
         vec![Box::new(day6::part1), Box::new(day6::part2)],
         vec![Box::new(day7::part1), Box::new(day7::part2)],
+        vec![Box::new(day8::part1), Box::new(day8::part2)],
     ];
 
     match args.len() {
