@@ -1,11 +1,14 @@
 use std::error::Error;
 
-pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
-    let map: Vec<Vec<i8>> = input.lines()
+fn parse_map(input: &str) -> Result<Vec<Vec<i8>>,Box<dyn Error>> {
+    input.lines()
         .map(|l| l.chars().map(|c| c.to_digit(10).map(|d| d as i8)).collect())
-        .collect::<Option<Vec<Vec<_>>>>()
-        .ok_or_else(|| "bad input".to_string())?;
-    
+        .collect::<Option<Vec<Vec<i8>>>>()
+        .ok_or_else(|| "bad input".into())
+}
+
+pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
+    let map = parse_map(input)?;
     let mut count = 0;
     let mut recorded: Vec<Vec<bool>> = vec![vec![false; map[0].len()]; map.len()];
     for (rownum, row) in map.iter().enumerate() {
