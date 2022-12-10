@@ -1,9 +1,4 @@
-use std::{
-    error::Error,
-    iter::{once, repeat, Cycle},
-    mem::replace,
-    str::FromStr,
-};
+use std::{error::Error, iter::repeat, mem::replace, str::FromStr};
 
 enum Instruction {
     Noop,
@@ -95,18 +90,18 @@ pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
 
     let output = proc
         .zip(beam)
-        .map(|((_, x), beamx)| {
+        .fold(String::new(), |mut acc, ((_, x), beamx)| {
             if (x - 1..=x + 1).contains(&beamx) {
-                '#'
+                acc.push('#');
             } else {
-                '.'
+                acc.push('.');
             }
-        })
-        .collect::<Vec<char>>()
-        .chunks(40)
-        .map(|chunk| chunk.iter().collect::<String>())
-        .collect::<Vec<String>>()
-        .join("\n");
+
+            if beamx == 39 {
+                acc.push('\n')
+            }
+            acc
+        });
 
     Ok(output)
 }
@@ -116,14 +111,15 @@ mod test {
     use super::*;
 
     const INPUT: &str = include_str!("tests/day10test.txt");
+    const OUTPUT2: &str = include_str!("tests/day10output2.txt");
 
     #[test]
     fn test_part1() {
         assert_eq!(part1(INPUT).unwrap(), "13140")
     }
 
+    #[test]
     fn test_part2() {
-        todo!("unimplemented");
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap().trim_end(), OUTPUT2);
     }
 }
