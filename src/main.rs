@@ -1,6 +1,7 @@
 mod days;
 
 use days::day1;
+use days::day10;
 use days::day2;
 use days::day3;
 use days::day4;
@@ -9,7 +10,6 @@ use days::day6;
 use days::day7;
 use days::day8;
 use days::day9;
-use days::day10;
 use std::env::{args, current_dir};
 use std::error::Error;
 use std::path::PathBuf;
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .ok_or(format!("invalid part {} for day {}", part, day))?;
 
             let result = f(&input)?;
-            println!("Day {} Part {}: {}", day, part, result);
+            println!("Day {} Part {}:\n{}", day, part, result);
             Ok(())
         }
         _ => {

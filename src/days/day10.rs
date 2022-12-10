@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    iter::{once, Cycle},
+    iter::{once, repeat, Cycle},
     mem::replace,
     str::FromStr,
 };
@@ -85,7 +85,30 @@ pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
 }
 
 pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
-    todo!("unimplemented")
+    let instructions: Vec<Instruction> = input
+        .lines()
+        .map(<Instruction as FromStr>::from_str)
+        .collect::<Result<_, _>>()?;
+
+    let proc = Processor::new(&instructions);
+    let beam = repeat(0..40).flatten();
+
+    let output = proc
+        .zip(beam)
+        .map(|((_, x), beamx)| {
+            if (x - 1..=x + 1).contains(&beamx) {
+                '#'
+            } else {
+                '.'
+            }
+        })
+        .collect::<Vec<char>>()
+        .chunks(40)
+        .map(|chunk| chunk.iter().collect::<String>())
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    Ok(output)
 }
 
 #[cfg(test)]
