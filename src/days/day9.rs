@@ -28,13 +28,26 @@ impl FromStr for Direction {
     }
 }
 
+fn parse_line(l: &str) -> Result<(Direction, usize), Box<dyn Error>> {
+    match l.split_once(' ') {
+        Some((d, n)) => Ok((d.parse()?, n.parse()?)),
+        None => Err(format!("invalid input line {}", l).into()),
+    }
+}
+
+fn iter_line(
+    line: Result<(Direction, usize), Box<dyn Error>>,
+) -> Box<dyn Iterator<Item = Result<Direction, Box<dyn Error>>>> {
+    match line {
+        Ok((d, n)) => Box::new(std::iter::from_fn(move || Some(Ok(d))).take(n)),
+        Err(e) => Box::new(std::iter::once(Err(e))),
+    }
+}
+
 fn parse_input<'a>(
     input: &'a str,
-) -> Box<dyn Iterator<Item = Result<(Direction, i32), Box<dyn Error>>> + 'a> {
-    Box::new(input.lines().map(|l| match l.split_once(' ') {
-        Some((d, n)) => Ok((d.parse::<Direction>()?, n.parse::<i32>()?)),
-        None => Err(format!("invalid input line {}", l).into()),
-    }))
+) -> Box<dyn Iterator<Item = Result<Direction, Box<dyn Error>>> + 'a> {
+    Box::new(input.lines().flat_map(|line| iter_line(parse_line(line))))
 }
 
 impl Point {
@@ -84,23 +97,19 @@ fn follow(tail: i32, head: i32) -> i32 {
 
 fn traverse(input: &str, rope_length: usize) -> Result<HashSet<Point>, Box<dyn Error>> {
     let mut rope = vec![Point::default(); rope_length];
-
-    let mut seen: HashSet<Point> = HashSet::new();
-    seen.insert(*rope.last().unwrap());
+    let mut seen = HashSet::new();
+    seen.insert(rope[0]);
 
     for cmd in parse_input(input) {
-        let (direction, length) = cmd?;
-        for _ in 0..length {
-            rope[0] = rope[0].move_by(direction);
-            for i in 1..rope.len() {
-                rope[i] = rope[i].follow(rope[i - 1]);
-            }
-
-            seen.insert(*rope.last().unwrap());
+        rope[0] = rope[0].move_by(cmd?);
+        for i in 1..rope.len() {
+            rope[i] = rope[i].follow(rope[i - 1]);
         }
+
+        seen.insert(*rope.last().unwrap());
     }
 
-    return Ok(seen);
+    Ok(seen)
 }
 
 pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
