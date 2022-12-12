@@ -78,8 +78,8 @@ impl Operand {
 }
 
 impl Monkey {
-    fn inspect_and_throw_item(&mut self, item: i64) -> Throw {
-        let new_item: i64 = self.op.apply(item) / 3;
+    fn inspect_and_throw_item(&mut self, item: i64, worry_divisor: i64) -> Throw {
+        let new_item: i64 = self.op.apply(item) / worry_divisor;
         self.total_inspections += 1;
 
         Throw {
@@ -92,11 +92,11 @@ impl Monkey {
         }
     }
 
-    fn inspect_and_throw(&mut self) -> Vec<Throw> {
+    fn inspect_and_throw(&mut self, worry_divisor: i64) -> Vec<Throw> {
         let items: Vec<i64> = self.items.drain(..).collect();
         items
             .iter()
-            .map(|i| self.inspect_and_throw_item(*i))
+            .map(|i| self.inspect_and_throw_item(*i, worry_divisor))
             .collect()
     }
 
@@ -159,6 +159,14 @@ impl FromStr for Monkey {
 }
 
 pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
+    run(input, 3, 20)
+}
+
+pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
+    run(input, 1, 10000)
+}
+
+fn run(input: &str, worry_divisor: i64, rounds: usize) -> Result<String, Box<dyn Error>> {
     let monkeys: Vec<Rc<RefCell<Monkey>>> = input
         .trim()
         .split("\n\n")
@@ -167,9 +175,9 @@ pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
         })
         .collect::<Result<Vec<Rc<RefCell<_>>>, _>>()?;
 
-    for _ in 0..20 {
+    for _ in 0..rounds {
         for monkey in &monkeys {
-            for throw in &monkey.borrow_mut().inspect_and_throw() {
+            for throw in &monkey.borrow_mut().inspect_and_throw(worry_divisor) {
                 monkeys[throw.monkey as usize]
                     .borrow_mut()
                     .items
@@ -198,10 +206,6 @@ pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
         .to_string())
 }
 
-pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
-    todo!("unimplemented")
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -213,8 +217,8 @@ mod test {
         assert_eq!(part1(INPUT).unwrap(), "10605")
     }
 
+    #[test]
     fn test_part2() {
-        todo!("unimplemented");
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "2713310158")
     }
 }
