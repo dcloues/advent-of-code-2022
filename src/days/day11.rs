@@ -175,13 +175,15 @@ fn run(input: &str, worry_divisor: i64, rounds: usize) -> Result<String, Box<dyn
         })
         .collect::<Result<Vec<Rc<RefCell<_>>>, _>>()?;
 
+    let cleanup_mod: i64 = monkeys.iter().map(|m| m.borrow().test_divisor).product();
+
     for _ in 0..rounds {
         for monkey in &monkeys {
             for throw in &monkey.borrow_mut().inspect_and_throw(worry_divisor) {
                 monkeys[throw.monkey as usize]
                     .borrow_mut()
                     .items
-                    .push(throw.item);
+                    .push(throw.item % cleanup_mod);
             }
         }
     }
