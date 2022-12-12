@@ -2,6 +2,7 @@ mod days;
 
 use days::day1;
 use days::day10;
+use days::day11;
 use days::day2;
 use days::day3;
 use days::day4;
@@ -34,6 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         vec![Box::new(day8::part1), Box::new(day8::part2)],
         vec![Box::new(day9::part1), Box::new(day9::part2)],
         vec![Box::new(day10::part1), Box::new(day10::part2)],
+        vec![Box::new(day11::part1), Box::new(day11::part2)],
     ];
 
     match args.len() {
