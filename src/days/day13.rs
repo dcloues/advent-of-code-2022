@@ -5,7 +5,7 @@ use std::{
 };
 
 #[derive(Debug)]
-struct Input(Vec<(Packet, Packet)>);
+struct Input(Vec<[Packet; 2]>);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Packet {
@@ -61,7 +61,7 @@ enum Token {
 }
 
 fn parse_input(s: &str) -> Result<Input, Box<dyn Error>> {
-    let mut pairs: Vec<(Packet, Packet)> = vec![];
+    let mut pairs: Vec<[Packet; 2]> = vec![];
     let mut tokens = Tokenizer {
         input: s.chars().peekable(),
     }
@@ -72,13 +72,11 @@ fn parse_input(s: &str) -> Result<Input, Box<dyn Error>> {
     Ok(Input(pairs))
 }
 
-fn parse_pair(
-    tokens: &mut Peekable<Tokenizer>,
-) -> Result<Option<(Packet, Packet)>, Box<dyn Error>> {
+fn parse_pair(tokens: &mut Peekable<Tokenizer>) -> Result<Option<[Packet; 2]>, Box<dyn Error>> {
     if tokens.peek().is_none() {
         Ok(None)
     } else {
-        Ok(Some((parse_packet(tokens)?, parse_packet(tokens)?)))
+        Ok(Some([parse_packet(tokens)?, parse_packet(tokens)?]))
     }
 }
 
@@ -145,14 +143,27 @@ pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
         .0
         .iter()
         .enumerate()
-        .filter_map(|(i, (p1, p2))| (p1 <= p2).then_some(i as i64 + 1))
+        .filter_map(|(i, [p1, p2])| (p1 <= p2).then_some(i as i64 + 1))
         .sum::<i64>();
 
     Ok(correct.to_string())
 }
 
+fn marker(n: i64) -> Packet {
+    Packet::List(vec![Packet::List(vec![Packet::Singleton(n)])])
+}
+
 pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
-    todo!("unimplemented")
+    let input: Input = input.parse()?;
+    let mut packets: Vec<&Packet> = input.0.iter().flatten().collect();
+    packets.sort();
+
+    let marker1 = marker(2);
+    let marker2 = marker(6);
+    let i1 = packets.binary_search(&&marker1).unwrap_err() + 1;
+    let i2 = packets.binary_search(&&marker2).unwrap_err() + 2;
+
+    return Ok((i1 * i2).to_string());
 }
 
 #[cfg(test)]
@@ -166,7 +177,8 @@ mod test {
         assert_eq!(part1(INPUT).unwrap(), "13")
     }
 
+    #[test]
     fn test_part2() {
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "140")
     }
 }
