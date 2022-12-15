@@ -1,20 +1,6 @@
-use std::{
-    error::Error,
-    fmt::{Display, Write},
-    str::FromStr,
-};
+use std::{error::Error, str::FromStr};
 
 use crate::grid::{Grid, Location};
-
-impl Display for Material {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Material::Empty => f.write_char('.'),
-            Material::Stone => f.write_char('#'),
-            Material::Sand => f.write_char('o'),
-        }
-    }
-}
 
 #[derive(Default, PartialEq, Eq, Clone, Copy, Debug)]
 enum Material {
@@ -22,6 +8,13 @@ enum Material {
     Empty,
     Stone,
     Sand,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+enum Outcome {
+    AtRest,
+    Escaped,
+    Blocked,
 }
 
 fn parse_line(line: &str) -> Result<Vec<Location>, Box<dyn Error>> {
@@ -47,30 +40,6 @@ fn parse_input(input: &str) -> Result<Grid<Material>, Box<dyn Error>> {
     Ok(grid)
 }
 
-enum Move {
-    Moved,
-    Escaped,
-}
-
-#[derive(PartialEq, Eq, Debug)]
-enum Outcome {
-    AtRest,
-    Escaped,
-    Blocked,
-}
-
-fn try_move(grid: &mut Grid<Material>, from: Location, to: Location) -> Option<Move> {
-    match grid.get(to) {
-        None => Some(Move::Escaped),
-        Some(Material::Empty) => {
-            grid.set(from, Material::Empty);
-            grid.set(to, Material::Sand);
-            Some(Move::Moved)
-        }
-        _ => None,
-    }
-}
-
 #[must_use]
 fn run_sand(grid: &mut Grid<Material>, mut sand: Location) -> Outcome {
     if let Some(Material::Sand) = grid.get(sand) {
@@ -80,22 +49,33 @@ fn run_sand(grid: &mut Grid<Material>, mut sand: Location) -> Outcome {
     grid.set(sand, Material::Sand);
 
     loop {
-        let options = [sand.up(), sand.up().left(), sand.up().right()];
-
-        let mut moved = false;
-        for to in options {
-            match try_move(grid, sand, to) {
-                Some(Move::Moved) => {
-                    sand = to;
-                    moved = true;
-                    break;
+        // first, figure out which of the move options (down, down+left, down+right)
+        // are valid, and pass along the material type encountered at the first
+        // valid move.
+        let mv = [sand.up(), sand.up().left(), sand.up().right()]
+            .iter()
+            .cloned()
+            .find_map(|l| {
+                let m = grid.get(l);
+                match m {
+                    None | Some(Material::Empty) => Some((l, m)),
+                    _ => None,
                 }
-                Some(Move::Escaped) => return Outcome::Escaped,
-                None => {}
+            });
+
+        match mv {
+            // If the material type is None, we fell off the grid
+            Some((_, None)) => return Outcome::Escaped,
+            // Otherwise, move the sand into place and repeat
+            Some((to, Some(Material::Empty))) => {
+                grid.set(sand, Material::Empty);
+                grid.set(to, Material::Sand);
+                sand = to;
             }
-        }
-        if !moved {
-            return Outcome::AtRest;
+            // We couldn't find a move at all
+            None => return Outcome::AtRest,
+            // This is a logic error - the move selection, above, should never produce this
+            Some(_) => panic!("impossible move state reached: {mv:?}"),
         }
     }
 }
