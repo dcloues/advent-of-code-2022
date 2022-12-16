@@ -11,6 +11,7 @@ struct Point {
 struct Signal {
     sensor: Point,
     signal: Point,
+    radius: i32,
 }
 
 type Span = (i32, i32);
@@ -41,10 +42,7 @@ impl FromStr for Signal {
             .split_once(": closest beacon is at ")
             .ok_or_else(|| -> Box<dyn Error> { format!("bad input: {s}").into() })?;
 
-        Ok(Self {
-            sensor: points.0.parse()?,
-            signal: points.1.parse()?,
-        })
+        Ok(Self::new(points.0.parse()?, points.1.parse()?))
     }
 }
 
@@ -64,6 +62,15 @@ impl FromStr for Point {
 }
 
 impl Signal {
+    fn new(sensor: Point, signal: Point) -> Self {
+        let radius = sensor.taxicab_distance(&signal);
+        Self {
+            sensor,
+            signal,
+            radius,
+        }
+    }
+
     fn rowspan(&self, y: i32) -> Option<Span> {
         let dy = (self.sensor.y - y).abs();
         if dy <= self.radius() {
@@ -79,8 +86,9 @@ impl Signal {
         }
     }
 
+    #[inline]
     fn radius(&self) -> i32 {
-        self.sensor.taxicab_distance(&self.signal)
+        self.radius
     }
 }
 
