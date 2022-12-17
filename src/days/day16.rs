@@ -1,4 +1,9 @@
-use std::{collections::HashMap, error::Error, str::FromStr};
+use core::hash::Hash;
+use std::{
+    collections::{BinaryHeap, HashMap},
+    error::Error,
+    str::FromStr,
+};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 type ID = [char; 2];
@@ -78,10 +83,123 @@ impl FromStr for Caves {
     }
 }
 
+#[derive(PartialEq, Eq, Clone)]
+struct State<T> {
+    cost: i64,
+    node: T,
+}
+#[derive(Debug)]
+struct Edge<T> {
+    node: T,
+    cost: i64,
+}
+
+impl<T> Ord for State<T>
+where
+    T: Eq + Ord,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .cost
+            .cmp(&self.cost)
+            .then_with(|| self.node.cmp(&other.node))
+    }
+}
+
+impl<T> PartialOrd for State<T>
+where
+    T: Eq + Ord,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn shortest_path<T>(edges: &HashMap<T, Vec<Edge<T>>>, start: T, goal: T) -> Option<i64>
+where
+    T: Clone + Eq + Ord + Hash,
+{
+    let mut dist: HashMap<T, i64> = edges.keys().cloned().map(|k| (k, i64::MAX)).collect();
+    let mut heap = BinaryHeap::new();
+    dist.insert(start.clone(), 0);
+    heap.push(State {
+        cost: 0,
+        node: start,
+    });
+
+    while let Some(State { cost, node }) = heap.pop() {
+        if node == goal {
+            return Some(cost);
+        }
+
+        if cost > dist[&node] {
+            continue;
+        }
+
+        if let Some(edges) = edges.get(&node) {
+            for edge in edges {
+                let next = State {
+                    cost: cost + edge.cost,
+                    node: edge.node.clone(),
+                };
+                if next.cost < dist[&next.node] {
+                    heap.push(next.clone());
+                    dist.insert(next.node.clone(), next.cost);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 pub fn part1(input: &str) -> Result<String> {
+    let caves: Caves = input.parse()?;
+
+    let worth_opening: Vec<ID> = caves
+        .valves
+        .values()
+        .filter_map(|v| if v.flow_rate > 0 { Some(v.id) } else { None })
+        .collect();
+
+    let all_edges: HashMap<ID, Vec<Edge<ID>>> = caves
+        .valves
+        .iter()
+        .map(|(id, v)| {
+            (
+                *id,
+                v.neighbors
+                    .iter()
+                    .map(|&node| Edge { cost: 1, node })
+                    .collect(),
+            )
+        })
+        .collect();
+
+    let mut summarized: HashMap<ID, Vec<Edge<ID>>> = HashMap::new();
+    for src in &worth_opening {
+        let edges = worth_opening
+            .iter()
+            .filter_map(|dst| {
+                if src == dst {
+                    None
+                } else {
+                    Some(Edge {
+                        node: *dst,
+                        cost: shortest_path(&all_edges, *src, *dst).unwrap(),
+                    })
+                }
+            })
+            .collect();
+        summarized.insert(src.clone(), edges);
+    }
+
+    println!("condensed edges to: {summarized:#?}");
+
     todo!("unimplemented")
 }
 
+#[allow(unused_variables)]
 pub fn part2(input: &str) -> Result<String> {
     todo!("unimplemented")
 }
