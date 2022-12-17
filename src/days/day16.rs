@@ -156,10 +156,18 @@ where
 pub fn part1(input: &str) -> Result<String> {
     let caves: Caves = input.parse()?;
 
-    let worth_opening: Vec<ID> = caves
+    let start: ID = ['A', 'A'];
+
+    let summarize_ids: Vec<ID> = caves
         .valves
         .values()
-        .filter_map(|v| if v.flow_rate > 0 { Some(v.id) } else { None })
+        .filter_map(|v| {
+            if v.id == start || v.flow_rate > 0 {
+                Some(v.id)
+            } else {
+                None
+            }
+        })
         .collect();
 
     let all_edges: HashMap<ID, Vec<Edge<ID>>> = caves
@@ -177,12 +185,17 @@ pub fn part1(input: &str) -> Result<String> {
         .collect();
 
     let mut summarized: HashMap<ID, Vec<Edge<ID>>> = HashMap::new();
-    for src in &worth_opening {
-        let edges = worth_opening
+    for src in &summarize_ids {
+        let edges = summarize_ids
             .iter()
             .filter_map(|dst| {
                 if src == dst {
                     None
+                } else if let Some(cached) = summarized.get(dst) {
+                    Some(Edge {
+                        node: *dst,
+                        cost: cached.iter().find(|e| e.node == *src).unwrap().cost,
+                    })
                 } else {
                     Some(Edge {
                         node: *dst,
