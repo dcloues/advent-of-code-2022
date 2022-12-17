@@ -2,6 +2,7 @@ use core::hash::Hash;
 use std::{
     collections::{BinaryHeap, HashMap},
     error::Error,
+    fmt::Debug,
     str::FromStr,
 };
 
@@ -156,6 +157,7 @@ where
 struct Searcher {
     caves: Caves,
     edges: HashMap<ID, Vec<Edge<ID>>>,
+    nodenames: Vec<ID>,
 }
 
 impl Searcher {
@@ -209,9 +211,12 @@ impl Searcher {
             summarized.insert(src.clone(), edges);
         }
 
+        let nodenames = summarized.keys().cloned().collect();
+
         Self {
             caves,
             edges: summarized,
+            nodenames,
         }
     }
 
@@ -250,6 +255,21 @@ impl Searcher {
     }
 }
 
+fn subsets<T: Clone + Debug>(s: &[T]) -> Vec<Vec<T>> {
+    if s.is_empty() {
+        vec![vec![]]
+    } else {
+        let rest = subsets(&s[1..]);
+        let mut all = Vec::with_capacity(rest.len() * 2);
+        all.extend_from_slice(&rest);
+        for mut ss in rest {
+            ss.push(s[0].clone());
+            all.push(ss);
+        }
+        all
+    }
+}
+
 pub fn part1(input: &str) -> Result<String> {
     let caves: Caves = input.parse()?;
     let start: ID = ['A', 'A'];
@@ -260,7 +280,38 @@ pub fn part1(input: &str) -> Result<String> {
 
 #[allow(unused_variables)]
 pub fn part2(input: &str) -> Result<String> {
-    todo!("unimplemented")
+    let caves: Caves = input.parse()?;
+    let start: ID = ['A', 'A'];
+    let searcher = Searcher::new(start, caves);
+
+    // To divvy up the work between us and our elephant friend,
+    // we calculate all possible subsets of the nodes to visit.
+    // Then, for each subset, we visit the subset and dispatch our
+    // friend to the remaining nodes.
+    let all_subsets = subsets(&searcher.nodenames);
+    let best = all_subsets
+        .iter()
+        .map(|ss| {
+            let mut elephant_subset: Vec<ID> = searcher
+                .nodenames
+                .iter()
+                .filter(|n| !ss.contains(n))
+                .cloned()
+                .collect();
+            let elf_best = searcher.find_best(start, &mut elephant_subset, 27, 0);
+            let elph_best = searcher.find_best(start, &mut ss.clone(), 27, 0);
+            elf_best + elph_best
+        })
+        .max()
+        .unwrap();
+
+    println!(
+        "calculated {} subsets of {} items",
+        all_subsets.len(),
+        searcher.nodenames.len()
+    );
+
+    Ok(best.to_string())
 }
 
 #[cfg(test)]
@@ -297,6 +348,6 @@ mod test {
 
     #[test]
     fn test_part2() {
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "1707")
     }
 }
