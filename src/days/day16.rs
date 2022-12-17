@@ -178,7 +178,7 @@ impl Searcher {
         let best = self.edges[&start]
             .iter()
             .filter_map(|e| {
-                if visited.contains(&e.node) {
+                if time_remaining <= e.cost || visited.contains(&e.node) {
                     None
                 } else {
                     Some(self.find_best(e.node, visited, time_remaining - e.cost, released))
