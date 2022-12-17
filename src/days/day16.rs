@@ -159,6 +159,62 @@ struct Searcher {
 }
 
 impl Searcher {
+    fn new(start: ID, caves: Caves) -> Self {
+        let summarize_ids: Vec<ID> = caves
+            .valves
+            .values()
+            .filter_map(|v| {
+                if v.id == start || v.flow_rate > 0 {
+                    Some(v.id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let all_edges: HashMap<ID, Vec<Edge<ID>>> = caves
+            .valves
+            .iter()
+            .map(|(id, v)| {
+                (
+                    *id,
+                    v.neighbors
+                        .iter()
+                        .map(|&node| Edge { cost: 1, node })
+                        .collect(),
+                )
+            })
+            .collect();
+
+        let mut summarized: HashMap<ID, Vec<Edge<ID>>> = HashMap::new();
+        for src in &summarize_ids {
+            let edges = summarize_ids
+                .iter()
+                .filter_map(|dst| {
+                    if src == dst {
+                        None
+                    } else if let Some(cached) = summarized.get(dst) {
+                        Some(Edge {
+                            node: *dst,
+                            cost: cached.iter().find(|e| e.node == *src).unwrap().cost,
+                        })
+                    } else {
+                        Some(Edge {
+                            node: *dst,
+                            cost: shortest_path(&all_edges, *src, *dst).unwrap(),
+                        })
+                    }
+                })
+                .collect();
+            summarized.insert(src.clone(), edges);
+        }
+
+        Self {
+            caves,
+            edges: summarized,
+        }
+    }
+
     fn find_best(
         &self,
         start: ID,
@@ -196,61 +252,8 @@ impl Searcher {
 
 pub fn part1(input: &str) -> Result<String> {
     let caves: Caves = input.parse()?;
-
     let start: ID = ['A', 'A'];
-
-    let summarize_ids: Vec<ID> = caves
-        .valves
-        .values()
-        .filter_map(|v| {
-            if v.id == start || v.flow_rate > 0 {
-                Some(v.id)
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let all_edges: HashMap<ID, Vec<Edge<ID>>> = caves
-        .valves
-        .iter()
-        .map(|(id, v)| {
-            (
-                *id,
-                v.neighbors
-                    .iter()
-                    .map(|&node| Edge { cost: 1, node })
-                    .collect(),
-            )
-        })
-        .collect();
-
-    let mut summarized: HashMap<ID, Vec<Edge<ID>>> = HashMap::new();
-    for src in &summarize_ids {
-        let edges = summarize_ids
-            .iter()
-            .filter_map(|dst| {
-                if src == dst {
-                    None
-                } else if let Some(cached) = summarized.get(dst) {
-                    Some(Edge {
-                        node: *dst,
-                        cost: cached.iter().find(|e| e.node == *src).unwrap().cost,
-                    })
-                } else {
-                    Some(Edge {
-                        node: *dst,
-                        cost: shortest_path(&all_edges, *src, *dst).unwrap(),
-                    })
-                }
-            })
-            .collect();
-        summarized.insert(src.clone(), edges);
-    }
-    let searcher = Searcher {
-        caves,
-        edges: summarized,
-    };
+    let searcher = Searcher::new(start, caves);
 
     Ok(searcher.find_best(start, &mut vec![], 31, 0).to_string())
 }
