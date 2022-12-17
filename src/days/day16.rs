@@ -11,7 +11,7 @@ type ID = [char; 2];
 #[derive(Debug, PartialEq, Eq)]
 struct Valve {
     id: ID,
-    flow_rate: i32,
+    flow_rate: i64,
     neighbors: Vec<ID>,
 }
 
@@ -42,7 +42,7 @@ impl FromStr for Valve {
         tokens.next();
 
         let flow_rate = tokens.next().ok_or_else(|| "missing rate".to_string())?;
-        let flow_rate: i32 = flow_rate
+        let flow_rate: i64 = flow_rate
             .split_once('=')
             .ok_or_else(|| "invalid rate".to_string())?
             .1
@@ -153,6 +153,47 @@ where
     None
 }
 
+struct Searcher {
+    caves: Caves,
+    edges: HashMap<ID, Vec<Edge<ID>>>,
+}
+
+impl Searcher {
+    fn find_best(
+        &self,
+        start: ID,
+        visited: &mut Vec<ID>,
+        mut time_remaining: i64,
+        mut released: i64,
+    ) -> i64 {
+        // opening valve takes 1 minute
+        time_remaining = time_remaining - 1;
+        if time_remaining < 0 {
+            return released;
+        }
+        visited.push(start.clone());
+
+        released += time_remaining * self.caves.valves[&start].flow_rate;
+
+        let best = self.edges[&start]
+            .iter()
+            .filter_map(|e| {
+                if visited.contains(&e.node) {
+                    None
+                } else {
+                    Some(self.find_best(e.node, visited, time_remaining - e.cost, released))
+                }
+            })
+            .max()
+            .unwrap_or(released);
+
+        let popped = visited.pop();
+        debug_assert_eq!(popped, Some(start.clone()));
+
+        best
+    }
+}
+
 pub fn part1(input: &str) -> Result<String> {
     let caves: Caves = input.parse()?;
 
@@ -206,10 +247,12 @@ pub fn part1(input: &str) -> Result<String> {
             .collect();
         summarized.insert(src.clone(), edges);
     }
+    let searcher = Searcher {
+        caves,
+        edges: summarized,
+    };
 
-    println!("condensed edges to: {summarized:#?}");
-
-    todo!("unimplemented")
+    Ok(searcher.find_best(start, &mut vec![], 31, 0).to_string())
 }
 
 #[allow(unused_variables)]
@@ -246,7 +289,7 @@ mod test {
 
     #[test]
     fn test_part1() {
-        assert_eq!(part1(INPUT).unwrap(), "")
+        assert_eq!(part1(INPUT).unwrap(), "1651")
     }
 
     #[test]
