@@ -17,6 +17,65 @@ fn rev<T>(mut v: Vec<T>) -> Vec<T> {
     v
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PieceType {
+    HBar,
+    Plus,
+    BigL,
+    VBar,
+    Block,
+}
+
+impl Into<Piece> for PieceType {
+    fn into(self) -> Piece {
+        match self {
+            PieceType::HBar => Piece {
+                col: 2,
+                width: 4,
+                height: 1,
+                blocks: rev(vec![false, false, true, true, true, true, false]),
+            },
+            PieceType::Plus => Piece {
+                col: 2,
+                width: 3,
+                height: 3,
+                blocks: rev(vec![
+                    false, false, false, true, false, false, false, false, false, true, true, true,
+                    false, false, false, false, false, true, false, false, false,
+                ]),
+            },
+            PieceType::BigL => Piece {
+                col: 2,
+                width: 3,
+                height: 3,
+                blocks: rev(vec![
+                    false, false, false, false, true, false, false, false, false, false, false,
+                    true, false, false, false, false, true, true, true, false, false,
+                ]),
+            },
+            PieceType::VBar => Piece {
+                col: 2,
+                width: 1,
+                height: 4,
+                blocks: rev(vec![
+                    false, false, true, false, false, false, false, false, false, true, false,
+                    false, false, false, false, false, true, false, false, false, false, false,
+                    false, true, false, false, false, false,
+                ]),
+            },
+            PieceType::Block => Piece {
+                col: 2,
+                width: 2,
+                height: 2,
+                blocks: rev(vec![
+                    false, false, true, true, false, false, false, false, false, true, true, false,
+                    false, false,
+                ]),
+            },
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Piece {
     col: usize,
@@ -25,55 +84,14 @@ struct Piece {
     blocks: Vec<bool>,
 }
 
-fn pieces() -> Vec<Piece> {
-    let hbar = Piece {
-        col: 2,
-        width: 4,
-        height: 1,
-        blocks: rev(vec![false, false, true, true, true, true, false]),
-    };
-
-    let plus = Piece {
-        col: 2,
-        width: 3,
-        height: 3,
-        blocks: rev(vec![
-            false, false, false, true, false, false, false, false, false, true, true, true, false,
-            false, false, false, false, true, false, false, false,
-        ]),
-    };
-
-    let bigl = Piece {
-        col: 2,
-        width: 3,
-        height: 3,
-        blocks: rev(vec![
-            false, false, false, false, true, false, false, false, false, false, false, true,
-            false, false, false, false, true, true, true, false, false,
-        ]),
-    };
-
-    let vbar = Piece {
-        col: 2,
-        width: 1,
-        height: 4,
-        blocks: rev(vec![
-            false, false, true, false, false, false, false, false, false, true, false, false,
-            false, false, false, false, true, false, false, false, false, false, false, true,
-            false, false, false, false,
-        ]),
-    };
-
-    let block = Piece {
-        col: 2,
-        width: 2,
-        height: 2,
-        blocks: rev(vec![
-            false, false, true, true, false, false, false, false, false, true, true, false, false,
-            false,
-        ]),
-    };
-    vec![hbar, plus, bigl, vbar, block]
+fn pieces() -> Vec<PieceType> {
+    vec![
+        PieceType::HBar,
+        PieceType::Plus,
+        PieceType::BigL,
+        PieceType::VBar,
+        PieceType::Block,
+    ]
 }
 
 const BOARD_WIDTH: usize = 7;
@@ -108,14 +126,14 @@ impl Piece {
 }
 
 struct Game<'a> {
-    pieces: Box<dyn Iterator<Item = Piece> + 'a>,
+    pieces: Box<dyn Iterator<Item = PieceType> + 'a>,
     moves: Box<dyn Iterator<Item = Move> + 'a>,
     board: Vec<bool>,
     piece_count: i64,
 }
 
 impl<'a> Game<'a> {
-    fn new(piece_spec: &'a Vec<Piece>, move_spec: &'a Vec<Move>) -> Self {
+    fn new(piece_spec: &'a Vec<PieceType>, move_spec: &'a Vec<Move>) -> Self {
         Self {
             pieces: Box::new(piece_spec.iter().cloned().cycle()),
             moves: Box::new(move_spec.iter().cloned().cycle()),
@@ -123,28 +141,30 @@ impl<'a> Game<'a> {
             piece_count: 0,
         }
     }
-    fn run_piece(&mut self) {
+    fn run_piece(&mut self) -> (PieceType, usize) {
         self.piece_count += 1;
-        let mut piece = self.pieces.next().unwrap().clone();
+        let piece_type = self.pieces.next().unwrap().clone();
+        let mut piece: Piece = piece_type.into();
         self.expand_board(piece.height);
         let mut piece_row = self.block_height() + 3;
 
-        self.print_board(&piece, piece_row, "Spawned new piece");
+        // self.print_board(&piece, piece_row, "Spawned new piece");
         // Piece always starts out three rows above the top of the grid.
         // For these first three moves, we don't need collision checks,
         // because pieces cannot get stuck at this stage.
         for _ in 0..3 {
             // alternate applying gas jets...
             let mv = self.moves.next().unwrap();
+            #[allow(unused)]
             let moved = piece.apply_move(mv);
-            if moved {
-                self.print_board(&piece, piece_row, &format!("Applied move {mv:?}"));
-            } else {
-                self.print_board(&piece, piece_row, &format!("Skipped move {mv:?} (wall)"));
-            }
+            // if moved {
+            //     self.print_board(&piece, piece_row, &format!("Applied move {mv:?}"));
+            // } else {
+            //     self.print_board(&piece, piece_row, &format!("Skipped move {mv:?} (wall)"));
+            // }
             // and applying gravity
             piece_row -= 1;
-            self.print_board(&piece, piece_row, "Applied gravity");
+            // self.print_board(&piece, piece_row, "Applied gravity");
         }
 
         // Now, we're overlapping with the board, which means pieces
@@ -156,11 +176,11 @@ impl<'a> Game<'a> {
             if !self.check_collision(&newpiece, piece_row) {
                 piece = newpiece;
             }
-            self.print_board(
-                &piece,
-                piece_row,
-                &format!("Applied move {mv:?} w/ collision detection"),
-            );
+            // self.print_board(
+            //     &piece,
+            //     piece_row,
+            //     &format!("Applied move {mv:?} w/ collision detection"),
+            // );
 
             if piece_row == 0 || self.check_collision(&piece, piece_row - 1) {
                 self.print_board(&piece, piece_row, "Piece landed");
@@ -168,11 +188,11 @@ impl<'a> Game<'a> {
                 break;
             } else {
                 piece_row -= 1;
-                self.print_board(&piece, piece_row, "Applied gravity");
+                // self.print_board(&piece, piece_row, "Applied gravity");
             }
-
-            //
         }
+
+        return (piece_type, self.block_height());
     }
 
     // land a piece at a particular row, copying its blocks into
@@ -215,8 +235,13 @@ impl<'a> Game<'a> {
         }
     }
 
+    #[allow(unused)]
     fn print_board(&mut self, piece: &Piece, row: usize, desc: &str) {
         return;
+        // 😭
+        if self.piece_count < 8000 {
+            return;
+        }
         let restore_board = self.board.clone();
         self.land(piece.clone(), row);
         print!("{}[2J", 27 as char);
@@ -238,7 +263,7 @@ impl<'a> Game<'a> {
 
 impl<'a> Display for Game<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (rowinv, chunk) in self.board.chunks(BOARD_WIDTH).enumerate().rev().take(40) {
+        for (rowinv, chunk) in self.board.chunks(BOARD_WIDTH).enumerate().rev().take(500) {
             f.write_char('|')?;
             for b in chunk.iter().rev() {
                 f.write_char(if *b { '#' } else { '.' })?;
@@ -274,8 +299,35 @@ pub fn part2(input: &str) -> Result<String> {
 
     let start = Instant::now();
     let test_tick = 100000;
+    let mut history: Vec<(PieceType, usize)> = Vec::with_capacity(10000);
+    let target_pieces: i64 = 1000000000000;
     loop {
-        game.run_piece();
+        let height = game.block_height();
+        let (piecetype, _) = game.run_piece();
+        let height_delta = game.block_height() - height;
+        history.push((piecetype, height_delta));
+        if history.len() > 20000 {
+            if let Some(cycle) = find_cycle(&history[history.len() - 10000..], 20) {
+                println!(
+                    "Found cycle at {} with len {}",
+                    history.len() - 10000,
+                    cycle.len(),
+                );
+
+                let pre_len = history.len() - 10000;
+                let cycle_delta: i64 = cycle.iter().map(|(_, dh)| *dh as i64).sum();
+                let total_height: i64 = history[0..pre_len].iter().map(|(_, dh)| *dh as i64).sum();
+
+                let repetitions = (target_pieces - pre_len as i64) / cycle.len() as i64;
+                let remainder: usize = (target_pieces as usize - pre_len) % cycle.len();
+                let remainder_delta: i64 =
+                    cycle.iter().take(remainder).map(|(_, dh)| *dh as i64).sum();
+
+                let grand_total = total_height + repetitions * cycle_delta + remainder_delta;
+                return Ok(grand_total.to_string());
+            }
+        }
+
         if game.piece_count == test_tick {
             let now = Instant::now();
             let elapsed = now - start;
@@ -291,12 +343,46 @@ pub fn part2(input: &str) -> Result<String> {
     }
 }
 
+fn find_cycle<'a, T>(ts: &'a [T], minlen: usize) -> Option<&'a [T]>
+where
+    T: PartialEq + std::fmt::Debug,
+{
+    assert!(minlen > 1, "minimum length must be > 1");
+    let maxlen = ts.len() / 2;
+    for len in minlen..=maxlen {
+        let start = 0;
+        if ts[start..start + len] == ts[start + len..start + 2 * len] {
+            return Some(&ts[start..start + len]);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     const INPUT: &str = include_str!("tests/day17test.txt");
     const LINE_BY_LINE: &str = include_str!("tests/day17testlines.txt");
+
+    #[test]
+    fn test_find_cycle() {
+        assert_eq!(find_cycle(&[1, 2, 3, 4, 5, 6, 7, 8], 2), None);
+        assert_eq!(
+            find_cycle(&[1, 2, 3, 4, 1, 2, 3, 4], 2).unwrap(),
+            &[1, 2, 3, 4][..]
+        );
+        assert_eq!(find_cycle(&[1, 2, 3, 4, 2, 3, 4], 2), None);
+        assert_eq!(
+            find_cycle(&[1, 2, 3, 4, 2, 3, 4][1..], 2).unwrap(),
+            &[2, 3, 4][..]
+        );
+
+        assert_eq!(
+            find_cycle(&[1, 2, 3, 4, 3, 4, 2, 3, 4, 3, 4][1..], 5).unwrap(),
+            &[2, 3, 4, 3, 4][..]
+        );
+    }
 
     #[test]
     fn test_part1() {
@@ -333,8 +419,8 @@ mod test {
         }
     }
 
+    #[test]
     fn test_part2() {
-        todo!("unimplemented");
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "1514285714288")
     }
 }
