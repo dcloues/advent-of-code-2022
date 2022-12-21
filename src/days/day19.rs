@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 #[allow(unused)]
 use std::{error::Error, num::ParseIntError, str::FromStr};
 
@@ -30,8 +29,6 @@ struct State {
     geode_robots: i32,
 
     built: Option<Resource>,
-
-    previous: Option<Box<State>>,
 }
 
 const MAX_TIME: i32 = 24;
@@ -118,7 +115,6 @@ impl Default for State {
             clay_robots: Default::default(),
             obsidian_robots: Default::default(),
             geode_robots: Default::default(),
-            previous: None,
             built: None,
         }
     }
@@ -153,15 +149,7 @@ impl State {
             let robots = self.get_robots(*resource);
 
             time_to_build = time_to_build.max(Self::ticks_to_build(*current, *robots, *cost));
-
-            // let needed = cost - current;
-            // time_to_build = 1 + (needed / robots);
-            // if time_to_build % robots != 0 {
-            //     time_to_build += 1;
-            // }
         }
-
-        // time_to_build += 1;
 
         let mut state = self.step(time_to_build)?;
         for (resource, cost) in &recipe.cost {
@@ -191,7 +179,6 @@ impl State {
                 clay: self.clay + self.clay_robots * time_units,
                 obsidian: self.obsidian + self.obsidian_robots * time_units,
                 geodes: self.geodes + self.geode_robots * time_units,
-                previous: Some(Box::new(self.clone())),
                 built: None,
                 ..*self
             })
@@ -291,37 +278,8 @@ pub fn part1(input: &str) -> Result<String> {
         .to_string())
 }
 
-pub fn part2(input: &str) -> Result<String> {
+pub fn part2(_input: &str) -> Result<String> {
     todo!("unimplemented")
-}
-
-fn debug_print_state(state: &State) {
-    if let Some(previous) = &state.previous {
-        debug_print_state(previous);
-    }
-    println!("== Minute {} ==", state.time);
-    for resource in [
-        Resource::Ore,
-        Resource::Clay,
-        Resource::Obsidian,
-        Resource::Geode,
-    ] {
-        let mut count = *state.get_robots(resource);
-        let total = *state.get_resource(resource);
-        if total > 0 {
-            if state.built == Some(resource) {
-                count = count - 1;
-            }
-            println!("{count} {resource:?} robot(s) collects {count}; total {total}");
-        }
-    }
-    if let Some(built) = state.built {
-        println!(
-            "The new {built:?} robot is ready; you now have {} of them",
-            state.get_robots(built),
-        );
-    }
-    println!();
 }
 
 #[cfg(test)]
@@ -395,7 +353,6 @@ mod test {
             State {
                 time: 5,
                 ore_robots: 2,
-                previous: Some(Box::new(state.clone())),
                 built: Some(Resource::Ore),
                 ..state
             }
@@ -418,7 +375,6 @@ mod test {
             State {
                 time: 3,
                 clay_robots: 1,
-                previous: Some(Box::new(state.clone())),
                 built: Some(Resource::Clay),
                 ..state
             }
@@ -448,7 +404,6 @@ mod test {
                 time: 4,
                 ore_robots: 3,
                 ore: 3,
-                previous: Some(Box::new(state.clone())),
                 built: Some(Resource::Ore),
                 ..state
             }
@@ -465,12 +420,9 @@ mod test {
         };
 
         let best0 = bps[0].find_best_outcome(&init).unwrap();
-        debug_print_state(&best0);
-        // println!("best0: {best0:?}");
         assert_eq!(best0.geodes, 9);
 
         let best1 = bps[1].find_best_outcome(&init).unwrap();
-        println!("best0: {best1:?}");
         assert_eq!(best1.geodes, 12);
     }
 
@@ -479,8 +431,8 @@ mod test {
         assert_eq!(part1(INPUT).unwrap(), "33")
     }
 
+    #[test]
     fn test_part2() {
-        todo!("unimplemented");
         assert_eq!(part2(INPUT).unwrap(), "")
     }
 }
