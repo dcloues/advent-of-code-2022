@@ -1,9 +1,10 @@
+use std::{collections::VecDeque, time::Instant};
 #[allow(unused)]
 use std::{error::Error, num::ParseIntError, str::FromStr};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 struct Blueprint {
     id: i32,
     ore: RobotRecipe,
@@ -47,6 +48,65 @@ struct RobotRecipe {
     cost: Vec<(Resource, i32)>,
 }
 
+#[derive(PartialEq, Eq)]
+struct StateQuality<'a> {
+    state: State,
+    blueprint: &'a Blueprint,
+}
+
+impl<'a> PartialOrd for StateQuality<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for StateQuality<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.total_resource_quality()
+            .cmp(&other.total_resource_quality())
+    }
+}
+
+impl<'a> StateQuality<'a> {
+    fn new(state: State, blueprint: &'a Blueprint) -> Self {
+        Self { state, blueprint }
+    }
+
+    fn total_resource_quality(&self) -> i32 {
+        self.resource_value(Resource::Ore)
+            + self.resource_value(Resource::Clay)
+            + self.resource_value(Resource::Obsidian)
+            + self.resource_value(Resource::Geode)
+    }
+
+    fn resource_value(&self, resource: Resource) -> i32 {
+        let base = self.state.get_resource(resource)
+            + (self.state.get_robots(resource) * self.state.time_left());
+        return base * self.resource_ore_value(resource);
+    }
+
+    fn resource_ore_value(&self, resource: Resource) -> i32 {
+        let recipe = match resource {
+            Resource::Ore => &self.blueprint.ore,
+            Resource::Clay => &self.blueprint.clay,
+            Resource::Obsidian => &self.blueprint.obsidian,
+            Resource::Geode => &self.blueprint.geode,
+        };
+
+        recipe
+            .cost
+            .iter()
+            .map(|(r, c)| {
+                if *r == Resource::Ore {
+                    *c
+                } else {
+                    c * self.resource_ore_value(*r)
+                }
+            })
+            .sum()
+    }
+}
+
 impl Blueprint {
     fn calculate_quality_level(&self) -> i32 {
         self.id
@@ -56,15 +116,30 @@ impl Blueprint {
                 .final_geodes
     }
     fn find_best_outcome(&self, start: &State) -> Option<State> {
-        if start.time >= MAX_TIME {
-            return Some(start.clone());
+        debug_assert!(start.time <= MAX_TIME);
+        let started_at = Instant::now();
+        let mut q = VecDeque::new();
+        q.push_front(start.clone());
+
+        let mut best = None;
+
+        while let Some(sq) = q.pop_front() {
+            debug_assert!(sq.time <= MAX_TIME);
+            best = match best {
+                None => Some(sq.clone()),
+                Some(s) if s.final_geodes < sq.final_geodes => Some(sq.clone()),
+                _ => best,
+            };
+            q.extend(self.next_states(&sq));
         }
 
-        self.next_states(&start)
-            .iter()
-            .map(|next| self.find_best_outcome(next))
-            .flatten()
-            .max_by(|s1, s2| s1.final_geodes.cmp(&s2.final_geodes))
+        let elapsed = Instant::now() - started_at;
+        println!(
+            "Blueprint {} found best outcome in {}ms",
+            self.id,
+            elapsed.as_millis()
+        );
+        best
     }
 
     fn next_states(&self, state: &State) -> Vec<State> {
@@ -420,10 +495,10 @@ mod test {
         };
 
         let best0 = bps[0].find_best_outcome(&init).unwrap();
-        assert_eq!(best0.geodes, 9);
+        assert_eq!(best0.final_geodes, 9);
 
         let best1 = bps[1].find_best_outcome(&init).unwrap();
-        assert_eq!(best1.geodes, 12);
+        assert_eq!(best1.final_geodes, 12);
     }
 
     #[test]
