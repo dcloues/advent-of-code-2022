@@ -68,10 +68,6 @@ impl<'a> Ord for StateQuality<'a> {
 }
 
 impl<'a> StateQuality<'a> {
-    fn new(state: State, blueprint: &'a Blueprint) -> Self {
-        Self { state, blueprint }
-    }
-
     fn total_resource_quality(&self) -> i32 {
         self.resource_value(Resource::Ore)
             + self.resource_value(Resource::Clay)
@@ -116,7 +112,7 @@ impl Blueprint {
                 .final_geodes
     }
     fn find_best_outcome(&self, start: &State) -> Option<State> {
-        debug_assert!(start.time <= MAX_TIME);
+        debug_assert!(start.time <= start.max_time);
         let started_at = Instant::now();
         let mut q = VecDeque::new();
         q.push_front(start.clone());
@@ -124,7 +120,7 @@ impl Blueprint {
         let mut best = None;
 
         while let Some(sq) = q.pop_front() {
-            debug_assert!(sq.time <= MAX_TIME);
+            debug_assert!(sq.time <= sq.max_time);
             best = match best {
                 None => Some(sq.clone()),
                 Some(s) if s.final_geodes < sq.final_geodes => Some(sq.clone()),
@@ -353,8 +349,21 @@ pub fn part1(input: &str) -> Result<String> {
         .to_string())
 }
 
-pub fn part2(_input: &str) -> Result<String> {
-    todo!("unimplemented")
+pub fn part2(input: &str) -> Result<String> {
+    let blueprints = parse_input(input)?;
+
+    Ok(blueprints
+        .iter()
+        .take(3)
+        .map(|bp| {
+            let start = State {
+                max_time: 32,
+                ..State::default()
+            };
+            bp.find_best_outcome(&start).unwrap().final_geodes
+        })
+        .product::<i32>()
+        .to_string())
 }
 
 #[cfg(test)]
@@ -508,6 +517,6 @@ mod test {
 
     #[test]
     fn test_part2() {
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "3472")
     }
 }
