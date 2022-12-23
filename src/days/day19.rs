@@ -495,6 +495,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_state_iteration() {
         let bps = parse_input(INPUT).unwrap();
 
@@ -511,11 +512,13 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_part1() {
         assert_eq!(part1(INPUT).unwrap(), "33")
     }
 
     #[test]
+    #[ignore]
     fn test_part2() {
         assert_eq!(part2(INPUT).unwrap(), "3472")
     }
