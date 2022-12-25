@@ -25,7 +25,7 @@ type ID = usize;
 #[derive(Eq)]
 struct Segment {
     id: usize,
-    datum: i32,
+    datum: i64,
     previous: Cell<ID>,
     next: Cell<ID>,
 }
@@ -37,14 +37,14 @@ impl PartialEq for Segment {
 }
 
 struct Mixer {
-    input: Vec<i32>,
+    input: Vec<i64>,
     current: usize,
     list: Vec<Segment>,
     head: ID,
 }
 
 impl Mixer {
-    fn new(input: Vec<i32>) -> Self {
+    fn new(input: Vec<i64>) -> Self {
         let list = Self::build_segments(&input);
         Self {
             input,
@@ -54,7 +54,7 @@ impl Mixer {
         }
     }
 
-    fn build_segments(input: &Vec<i32>) -> Vec<Segment> {
+    fn build_segments(input: &Vec<i64>) -> Vec<Segment> {
         let segments: Vec<Segment> = input
             .iter()
             .enumerate()
@@ -69,8 +69,16 @@ impl Mixer {
         segments
     }
 
-    fn mix_all(mut self) -> Vec<i32> {
+    fn mix_all(mut self) -> Vec<i64> {
         while let Some(_) = self.mix_one() {}
+        self.result()
+    }
+
+    fn mix_all_n_times(mut self, n: i64) -> Vec<i64> {
+        for _ in 0..n {
+            while let Some(_) = self.mix_one() {}
+            self.current = 0;
+        }
         self.result()
     }
 
@@ -80,15 +88,23 @@ impl Mixer {
         }
 
         let current = &self.list[self.current];
+        // println!(
+        //     "Mixing id={} datum={} dec={} modulo_length={}",
+        //     current.id,
+        //     current.datum,
+        //     current.datum / 811589153,
+        //     current.datum % self.input.len() as i64
+        // );
+        let lenmod = (self.input.len() as i64) - 1;
         if current.datum.is_positive() {
-            for _ in 0..current.datum {
+            for _ in 0..(current.datum % lenmod as i64) {
                 let swapped = current.move_right(self);
                 if self.head == current.id {
                     self.head = swapped.id;
                 }
             }
         } else if current.datum.is_negative() {
-            for _ in 0..current.datum.abs() {
+            for _ in 0..(current.datum.abs() % lenmod) {
                 let swapped = current.move_left(self);
                 if self.head == current.id {
                     self.head = swapped.id;
@@ -120,7 +136,7 @@ impl Mixer {
         }
     }
 
-    fn result(&self) -> Vec<i32> {
+    fn result(&self) -> Vec<i64> {
         let mut current = self.head;
         let mut data = Vec::with_capacity(self.input.len());
         loop {
@@ -172,19 +188,27 @@ impl Segment {
     }
 }
 
-pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
-    let input: Vec<i32> = input.lines().map(|s| s.parse()).collect::<Result<_, _>>()?;
-    let result = Mixer::new(input).mix_all();
-    let i = result.iter().position(|i| *i == 0).unwrap();
-    let k1 = result[(i + 1000) % result.len()];
-    let k2 = result[(i + 2000) % result.len()];
-    let k3 = result[(i + 3000) % result.len()];
+fn extract_coordinates(mixed: &Vec<i64>) -> i64 {
+    let i = mixed.iter().position(|i| *i == 0).unwrap();
+    let k1 = mixed[(i + 1000) % mixed.len()];
+    let k2 = mixed[(i + 2000) % mixed.len()];
+    let k3 = mixed[(i + 3000) % mixed.len()];
     println!("i={i} k1={k1}, k2={k2}, k3={k3}");
-    Ok((k1 + k2 + k3).to_string())
+    k1 + k2 + k3
 }
 
-pub fn part2(_input: &str) -> Result<String, Box<dyn Error>> {
-    todo!("unimplemented")
+pub fn part1(input: &str) -> Result<String, Box<dyn Error>> {
+    let input: Vec<i64> = input.lines().map(|s| s.parse()).collect::<Result<_, _>>()?;
+    let result = Mixer::new(input).mix_all();
+    Ok(extract_coordinates(&result).to_string())
+}
+
+pub fn part2(input: &str) -> Result<String, Box<dyn Error>> {
+    let mut input: Vec<i64> = input.lines().map(|s| s.parse()).collect::<Result<_, _>>()?;
+    input.iter_mut().for_each(|i| *i *= 811589153);
+
+    let result = Mixer::new(input).mix_all_n_times(10);
+    Ok(extract_coordinates(&result).to_string())
 }
 
 #[cfg(test)]
@@ -213,13 +237,39 @@ mod test {
     }
 
     #[test]
+    fn test_mix_large_n() {
+        let input = vec![
+            811589153,
+            1623178306,
+            -2434767459,
+            2434767459,
+            -1623178306,
+            0,
+            3246356612,
+        ];
+
+        let result = Mixer::new(input).mix_all_n_times(10);
+        assert_eq!(
+            result,
+            vec![
+                0,
+                -2434767459,
+                1623178306,
+                3246356612,
+                -1623178306,
+                2434767459,
+                811589153
+            ]
+        );
+    }
+
+    #[test]
     fn test_part1() {
         assert_eq!(part1(INPUT).unwrap(), "3")
     }
 
     #[test]
-    #[ignore]
     fn test_part2() {
-        todo!("unimplemented");
+        assert_eq!(part2(INPUT).unwrap(), "1623178306")
     }
 }
