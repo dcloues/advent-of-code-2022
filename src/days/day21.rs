@@ -1,19 +1,20 @@
-use std::{cell::RefCell, error::Error, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, error::Error, rc::Rc, str::FromStr};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 type Datum = i64;
 
+#[derive(Debug)]
 enum Operation {
     Add,
-    Subtract,
-    Multiply,
-    Divide,
+    Sub,
+    Mul,
+    Div,
 }
 
 type ID = String;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum Input {
     Monkey(ID),
     Constant(Datum),
@@ -33,9 +34,9 @@ impl FromStr for Operation {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "+" => Ok(Self::Add),
-            "-" => Ok(Self::Subtract),
-            "*" => Ok(Self::Multiply),
-            "/" => Ok(Self::Divide),
+            "-" => Ok(Self::Sub),
+            "*" => Ok(Self::Mul),
+            "/" => Ok(Self::Div),
             _ => Err(format!("invalid operation: {s}").into()),
         }
     }
@@ -102,9 +103,9 @@ impl Monkey {
                 (Some(Input::Constant(arg1)), Some(Input::Constant(arg2))) => {
                     self.output = Some(match self.operation {
                         Some(Operation::Add) => arg1 + arg2,
-                        Some(Operation::Subtract) => arg1 - arg2,
-                        Some(Operation::Multiply) => arg1 * arg2,
-                        Some(Operation::Divide) => arg1 / arg2,
+                        Some(Operation::Sub) => arg1 - arg2,
+                        Some(Operation::Mul) => arg1 * arg2,
+                        Some(Operation::Div) => arg1 / arg2,
                         None => panic!("invalid state: received input for a monkey without a job"),
                     })
                 }
@@ -123,7 +124,12 @@ fn partition(
         .partition(|m| m.borrow().has_answer())
 }
 
-pub fn part1(input: &str) -> Result<String> {
+fn parse_input(
+    input: &str,
+) -> Result<(
+    Vec<Rc<RefCell<Monkey>>>,
+    HashMap<String, Rc<RefCell<Monkey>>>,
+)> {
     let monkeys: Vec<Rc<RefCell<Monkey>>> = input
         .trim()
         .lines()
@@ -133,13 +139,18 @@ pub fn part1(input: &str) -> Result<String> {
         })
         .collect::<Result<_>>()?;
 
-    let root: Rc<RefCell<Monkey>> = monkeys
+    let by_id = monkeys
         .iter()
-        .find(|m| m.borrow().id == "root")
-        .cloned()
-        .unwrap();
+        .map(|m| (m.borrow().id.clone(), m.clone()))
+        .collect();
+    Ok((monkeys, by_id))
+}
 
+pub fn part1(input: &str) -> Result<String> {
+    let (monkeys, by_id) = parse_input(input)?;
     let (mut resolved, mut pending): (Vec<_>, Vec<_>) = partition(&monkeys);
+
+    let root = by_id["root"].clone();
 
     while !root.borrow().has_answer() {
         for monkey in &resolved {
@@ -156,8 +167,108 @@ pub fn part1(input: &str) -> Result<String> {
     Ok(answer.to_string())
 }
 
-pub fn part2(_input: &str) -> Result<String> {
-    todo!("unimplemented")
+pub fn part2(input: &str) -> Result<String> {
+    let (monkeys, by_id) = parse_input(input)?;
+
+    let root = by_id["root"].clone();
+    let (input1, input2) = {
+        let root = root.borrow();
+        let in1 = match &root.input1 {
+            Some(Input::Monkey(m)) => by_id[m].clone(),
+            _ => panic!("invalid root input"),
+        };
+
+        let in2 = match &root.input2 {
+            Some(Input::Monkey(m)) => by_id[m].clone(),
+            _ => panic!("invalid root input"),
+        };
+        (in1, in2)
+    };
+
+    let (mut resolved, mut pending): (Vec<_>, Vec<_>) = partition(&monkeys);
+    loop {
+        let mut resolved_any = false;
+        for monkey in &resolved {
+            // leave the human input unresolved
+            if monkey.borrow().id != "humn" {
+                for listening in &pending {
+                    let listening = &mut listening.borrow_mut();
+                    listening.receive_answer(&monkey.borrow());
+                    resolved_any = resolved_any || listening.has_answer();
+                }
+            }
+        }
+
+        if resolved_any {
+            (resolved, pending) = partition(&pending);
+        } else {
+            break;
+        }
+    }
+
+    let (value, pending) = {
+        if input1.borrow().has_answer() {
+            (input1.borrow().answer(), input2)
+        } else {
+            (input2.borrow().answer(), input1)
+        }
+    };
+
+    let human_value = find_human_value(value, pending, &by_id);
+
+    Ok(human_value.to_string())
+}
+
+fn find_human_value(
+    output: Datum,
+    monkey: Rc<RefCell<Monkey>>,
+    monkeys: &HashMap<String, Rc<RefCell<Monkey>>>,
+) -> Datum {
+    if monkey.borrow().id == "humn" {
+        output
+    } else {
+        let monkey = monkey.borrow();
+        match (&monkey.operation, &monkey.input1, &monkey.input2) {
+            (Some(Operation::Add), Some(Input::Monkey(arg1)), Some(Input::Constant(arg2))) => {
+                find_human_value(output - arg2, monkeys[arg1].clone(), monkeys)
+            }
+            (Some(Operation::Add), Some(Input::Constant(arg1)), Some(Input::Monkey(arg2))) => {
+                find_human_value(output - arg1, monkeys[arg2].clone(), monkeys)
+            }
+            (Some(Operation::Sub), Some(Input::Monkey(arg1)), Some(Input::Constant(arg2))) => {
+                // output = arg1 - arg2
+                // output + arg2 = arg1
+                find_human_value(output + arg2, monkeys[arg1].clone(), monkeys)
+            }
+            (Some(Operation::Sub), Some(Input::Constant(arg1)), Some(Input::Monkey(arg2))) => {
+                // output = arg1 - arg2
+                // output + arg2 = arg1
+                // arg2 = arg1 - output
+                find_human_value(arg1 - output, monkeys[arg2].clone(), monkeys)
+            }
+            (Some(Operation::Mul), Some(Input::Monkey(arg1)), Some(Input::Constant(arg2))) => {
+                find_human_value(output / arg2, monkeys[arg1].clone(), monkeys)
+            }
+            (Some(Operation::Mul), Some(Input::Constant(arg1)), Some(Input::Monkey(arg2))) => {
+                find_human_value(output / arg1, monkeys[arg2].clone(), monkeys)
+            }
+            (Some(Operation::Div), Some(Input::Monkey(arg1)), Some(Input::Constant(arg2))) => {
+                // output = arg1 / arg2
+                // arg1 = output * arg2
+                find_human_value(output * arg2, monkeys[arg1].clone(), monkeys)
+            }
+            (Some(Operation::Div), Some(Input::Constant(arg1)), Some(Input::Monkey(arg2))) => {
+                // output = arg1 / arg2
+                // 1 / output = arg2 / arg1
+                // arg1 / output = arg2
+                find_human_value(arg1 / output, monkeys[arg2].clone(), monkeys)
+            }
+            (op, arg1, arg2) => {
+                let id = &monkey.id;
+                panic!("Monkey {id}: unhandled operation={op:?} output={output} (arg1={arg1:?}, arg2={arg2:?})")
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -172,9 +283,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_part2() {
-        todo!("unimplemented");
-        // assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "301")
     }
 }
