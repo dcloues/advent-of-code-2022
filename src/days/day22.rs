@@ -33,6 +33,16 @@ enum Direction {
     Right,
 }
 
+struct Grid {
+    rows: Vec<Vec<Tile>>,
+}
+
+struct State {
+    grid: Grid,
+    position: (i32, i32), // x, y
+    facing: Direction,
+}
+
 impl Direction {
     fn turn(self, t: Turn) -> Self {
         match t {
@@ -58,16 +68,6 @@ impl Direction {
             Direction::Right => Direction::Down,
         }
     }
-}
-
-struct Grid {
-    rows: Vec<Vec<Tile>>,
-}
-
-struct State {
-    grid: Grid,
-    position: (i32, i32), // x, y
-    facing: Direction,
 }
 
 impl Display for Tile {
