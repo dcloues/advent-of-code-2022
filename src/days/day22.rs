@@ -1,7 +1,7 @@
 use std::{
+    collections::HashMap,
     error::Error,
     fmt::{Display, Write},
-    rc::Rc,
     str::FromStr,
 };
 
@@ -26,7 +26,7 @@ enum Move {
     Turn(Turn),
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 enum Direction {
     Up,
     Down,
@@ -42,16 +42,10 @@ struct State {
     grid: Grid,
     position: (i32, i32), // x, y
     facing: Direction,
+    net: Option<Net>,
 }
 
-struct State2 {
-    cube: Cube,
-    face: CubeFace,
-    position: (i32, i32), // x, y
-    facing: Direction,
-}
-
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum CubeFace {
     Top,
     North,
@@ -61,56 +55,24 @@ enum CubeFace {
     Bottom,
 }
 
-impl CubeFace {
-    fn neighbor(self, d: Direction) -> Self {
-        match (self, d) {
-            (CubeFace::Top, Direction::Up) => Self::North,
-            (CubeFace::Top, Direction::Down) => Self::South,
-            (CubeFace::Top, Direction::Left) => Self::West,
-            (CubeFace::Top, Direction::Right) => Self::East,
-            (CubeFace::North, Direction::Up) => Self::Top,
-            (CubeFace::North, Direction::Down) => Self::Bottom,
-            (CubeFace::North, Direction::Left) => todo!(),
-            (CubeFace::North, Direction::Right) => todo!(),
-            (CubeFace::South, Direction::Up) => todo!(),
-            (CubeFace::South, Direction::Down) => todo!(),
-            (CubeFace::South, Direction::Left) => todo!(),
-            (CubeFace::South, Direction::Right) => Self::East,
-            (CubeFace::East, Direction::Up) => todo!(),
-            (CubeFace::East, Direction::Down) => todo!(),
-            (CubeFace::East, Direction::Left) => todo!(),
-            (CubeFace::East, Direction::Right) => todo!(),
-            (CubeFace::West, Direction::Up) => todo!(),
-            (CubeFace::West, Direction::Down) => todo!(),
-            (CubeFace::West, Direction::Left) => todo!(),
-            (CubeFace::West, Direction::Right) => todo!(),
-            (CubeFace::Bottom, Direction::Up) => todo!(),
-            (CubeFace::Bottom, Direction::Down) => todo!(),
-            (CubeFace::Bottom, Direction::Left) => todo!(),
-            (CubeFace::Bottom, Direction::Right) => todo!(),
+#[derive(Clone, Copy, Debug)]
+enum Switcheroo {
+    RotateRight,
+    RotateLeft,
+    Rotate180,
+}
+
+impl Switcheroo {
+    fn invert(self) -> Self {
+        match self {
+            Switcheroo::RotateRight => Self::RotateLeft,
+            Switcheroo::RotateLeft => Self::RotateRight,
+            Switcheroo::Rotate180 => Self::Rotate180,
         }
     }
 }
 
-struct Cube {
-    faces: Cubed<Face>,
-    edges: Vec<Edge>,
-}
-
-struct Face {
-    face: CubeFace,
-    origin: (i32, i32),
-    grid: Grid,
-}
-
-#[derive(Clone)]
-enum Switcheroo {
-    RotateRight,
-    RotateLeft,
-    Mirror,
-}
-
-impl<T> Cubed<T> {
+impl<T: Clone> Cubed<T> {
     fn select(&self, face: CubeFace) -> &T {
         match face {
             CubeFace::Top => &self.top,
@@ -124,14 +86,44 @@ impl<T> Cubed<T> {
 }
 
 type NetOrigin = (usize, usize);
-type Edge = (CubeFace, CubeFace, Switcheroo);
+type Edge = (CubeFace, Direction, CubeFace, Switcheroo);
 
+#[derive(Clone)]
 struct Net {
     origins: Cubed<NetOrigin>,
-    edges: Vec<Edge>,
+    edges: HashMap<(CubeFace, Direction), (CubeFace, Switcheroo)>,
+    dim: i32,
 }
 
-struct Cubed<T> {
+impl Net {
+    fn new(dim: i32, origins: Cubed<NetOrigin>, edges: &[Edge]) -> Self {
+        let edges = edges
+            .iter()
+            .cloned()
+            .flat_map(|(from, dir, to, switch)| {
+                [
+                    ((from, dir), (to, switch)),
+                    (
+                        (to, dir.transform(switch.invert())),
+                        (from, switch.invert()),
+                    ),
+                ]
+            })
+            .collect();
+        println!("new New with edges:");
+        for edge in &edges {
+            println!("  {edge:?}");
+        }
+        Self {
+            dim,
+            origins,
+            edges,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct Cubed<T: Clone> {
     top: T,
     north: T,
     south: T,
@@ -140,13 +132,14 @@ struct Cubed<T> {
     bottom: T,
 }
 
-fn split_grid(grid: Grid) -> Cube {
+fn split_grid(grid: &Grid) -> Net {
     let dim = if grid.width() > 50 { 50 } else { 4 };
     // top north south east west bottom
     let nets = [
         // from the example
-        Net {
-            origins: Cubed {
+        Net::new(
+            dim,
+            Cubed {
                 top: (2, 0),
                 south: (2, 1),
                 west: (1, 1),
@@ -154,49 +147,145 @@ fn split_grid(grid: Grid) -> Cube {
                 bottom: (2, 2),
                 east: (3, 2),
             },
-            edges: vec![
-                (CubeFace::Top, CubeFace::West, Switcheroo::RotateLeft),
-                (CubeFace::Top, CubeFace::North, Switcheroo::Mirror),
-                (CubeFace::Top, CubeFace::East, Switcheroo::Mirror),
-                (CubeFace::South, CubeFace::East, Switcheroo::RotateRight),
-                (CubeFace::Bottom, CubeFace::North, Switcheroo::Mirror),
-                (CubeFace::Bottom, CubeFace::West, Switcheroo::RotateRight),
-                (CubeFace::North, CubeFace::East, Switcheroo::RotateRight),
+            &[
+                (
+                    CubeFace::Top,
+                    Direction::Left,
+                    CubeFace::West,
+                    Switcheroo::RotateLeft,
+                ),
+                (
+                    CubeFace::Top,
+                    Direction::Up,
+                    CubeFace::North,
+                    Switcheroo::Rotate180,
+                ),
+                (
+                    CubeFace::Top,
+                    Direction::Right,
+                    CubeFace::East,
+                    Switcheroo::Rotate180,
+                ),
+                (
+                    CubeFace::South,
+                    Direction::Right,
+                    CubeFace::East,
+                    Switcheroo::RotateRight,
+                ),
+                (
+                    CubeFace::Bottom,
+                    Direction::Down,
+                    CubeFace::North,
+                    Switcheroo::Rotate180,
+                ),
+                (
+                    CubeFace::Bottom,
+                    Direction::Left,
+                    CubeFace::West,
+                    Switcheroo::RotateRight,
+                ),
+                (
+                    CubeFace::North,
+                    Direction::Left,
+                    CubeFace::East,
+                    Switcheroo::RotateRight,
+                ),
             ],
-        },
+        ),
         // from my AOC input
-        Net {
-            edges: vec![],
-            origins: Cubed {
-                top: (1, 0),
-                east: (2, 0),
-                south: (1, 1),
-                bottom: (1, 2),
-                west: (0, 2),
-                north: (0, 3),
-            },
-        },
+        // Net {
+        //     edges: vec![],
+        //     origins: Cubed {
+        //         top: (1, 0),
+        //         east: (2, 0),
+        //         south: (1, 1),
+        //         bottom: (1, 2),
+        //         west: (0, 2),
+        //         north: (0, 3),
+        //     },
+        // },
     ];
 
-    nets.iter().find_map(|s| s.fold(dim, &grid)).unwrap()
+    nets.iter()
+        .find(|n| n.matches(dim as usize, grid))
+        .unwrap()
+        .clone()
 }
 
 impl Net {
-    fn fold(&self, dim: usize, grid: &Grid) -> Option<Cube> {
-        Some(Cube {
-            edges: self.edges.clone(),
-            faces: Cubed {
-                top: self.get_face(CubeFace::Top, dim, grid)?,
-                bottom: self.get_face(CubeFace::Bottom, dim, grid)?,
-                north: self.get_face(CubeFace::North, dim, grid)?,
-                south: self.get_face(CubeFace::South, dim, grid)?,
-                east: self.get_face(CubeFace::East, dim, grid)?,
-                west: self.get_face(CubeFace::West, dim, grid)?,
-            },
-        })
+    fn step(&self, position: (i32, i32), direction: Direction) -> ((i32, i32), Direction) {
+        // what face does it belong to?
+        let (face, (local_x, local_y)) = self
+            .faces()
+            .iter()
+            .find_map(|(face, origin)| {
+                if position.0 / self.dim == origin.0 as i32
+                    && position.1 / self.dim == origin.1 as i32
+                {
+                    Some((
+                        *face,
+                        (
+                            position.0 - (self.dim * origin.0 as i32),
+                            position.1 - (self.dim * origin.1 as i32),
+                        ),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+
+        let max_dim = self.dim - 1;
+        if let Some((to_face, transform)) = self.edges.get(&(face, direction)) {
+            let target_position = match (direction, transform) {
+                (Direction::Up, Switcheroo::RotateRight) => (0, local_x),
+                (Direction::Up, Switcheroo::RotateLeft) => (max_dim, max_dim - local_x),
+                (Direction::Up, Switcheroo::Rotate180) => (max_dim - local_x, 0),
+                (Direction::Down, Switcheroo::RotateRight) => (max_dim, local_x),
+                (Direction::Down, Switcheroo::RotateLeft) => (0, max_dim - local_x),
+                (Direction::Down, Switcheroo::Rotate180) => (max_dim - local_x, max_dim),
+                (Direction::Left, Switcheroo::RotateRight) => (max_dim, max_dim - local_y),
+                (Direction::Left, Switcheroo::RotateLeft) => (0, local_y),
+                (Direction::Left, Switcheroo::Rotate180) => (max_dim, max_dim - local_y),
+                (Direction::Right, Switcheroo::RotateRight) => (max_dim - local_y, 0),
+                (Direction::Right, Switcheroo::RotateLeft) => (local_y, max_dim),
+                (Direction::Right, Switcheroo::Rotate180) => (max_dim, max_dim - local_y),
+            };
+
+            println!("moved from {face:?} ({local_x},{local_y}) to {to_face:?} {target_position:?} via {transform:?}");
+            let origin = self.origins.select(*to_face);
+            let target_position = (
+                target_position.0 + self.dim * origin.0 as i32,
+                target_position.1 + self.dim * origin.1 as i32,
+            );
+
+            (target_position, direction.transform(*transform))
+        } else {
+            panic!("stepped into the void from face={face:?} direction={direction:?} position={position:?}");
+        }
     }
 
-    fn get_face(&self, face: CubeFace, dim: usize, grid: &Grid) -> Option<Face> {
+    fn faces(&self) -> Vec<(CubeFace, &NetOrigin)> {
+        vec![
+            (CubeFace::Top, &self.origins.top),
+            (CubeFace::Bottom, &self.origins.bottom),
+            (CubeFace::South, &self.origins.south),
+            (CubeFace::North, &self.origins.north),
+            (CubeFace::East, &self.origins.east),
+            (CubeFace::West, &self.origins.west),
+        ]
+    }
+
+    fn matches(&self, dim: usize, grid: &Grid) -> bool {
+        self.valid_face(CubeFace::Top, dim, grid)
+            && self.valid_face(CubeFace::Bottom, dim, grid)
+            && self.valid_face(CubeFace::North, dim, grid)
+            && self.valid_face(CubeFace::South, dim, grid)
+            && self.valid_face(CubeFace::East, dim, grid)
+            && self.valid_face(CubeFace::West, dim, grid)
+    }
+
+    fn valid_face(&self, face: CubeFace, dim: usize, grid: &Grid) -> bool {
         let origin = match face {
             CubeFace::Top => self.origins.top,
             CubeFace::North => self.origins.north,
@@ -206,26 +295,23 @@ impl Net {
             CubeFace::Bottom => self.origins.bottom,
         };
 
-        if grid.get(((dim * origin.0) as i32, (dim * origin.1) as i32)) == Tile::Void {
-            return None;
-        }
-
-        let y_range = dim * origin.1..dim * (1 + origin.1);
-        let x_range = dim * origin.0..dim * (1 + origin.0);
-        Some(Face {
-            face,
-            origin: (x_range.start as i32, y_range.start as i32),
-            grid: Grid {
-                rows: grid.rows[y_range]
-                    .iter()
-                    .map(|r| r[x_range.clone()].to_vec())
-                    .collect(),
-            },
-        })
+        grid.get(((dim * origin.0) as i32, (dim * origin.1) as i32)) != Tile::Void
     }
 }
 
 impl Direction {
+    fn invert(self) -> Self {
+        self.turn_right().turn_right()
+    }
+
+    fn transform(self, transform: Switcheroo) -> Self {
+        match transform {
+            Switcheroo::RotateRight => self.turn_right(),
+            Switcheroo::RotateLeft => self.turn_left(),
+            Switcheroo::Rotate180 => self.invert(),
+        }
+    }
+
     fn turn(self, t: Turn) -> Self {
         match t {
             Turn::Left => self.turn_left(),
@@ -341,7 +427,26 @@ impl State {
             grid,
             position: (col, 0),
             facing: Direction::Right,
+            net: None,
         }
+    }
+
+    fn password(&self) -> String {
+        println!(
+            "Final location x={} y={} facing={:?}",
+            self.position.0 + 1,
+            self.position.1 + 1,
+            self.facing,
+        );
+        let row = (1 + self.position.1) * 1000;
+        let col = (1 + self.position.0) * 4;
+        let facing_value = match self.facing {
+            Direction::Up => 3,
+            Direction::Down => 1,
+            Direction::Left => 2,
+            Direction::Right => 0,
+        };
+        (row + col + facing_value).to_string()
     }
 
     fn apply_moves(&mut self, moves: &[Move]) {
@@ -370,77 +475,26 @@ impl State {
                 Direction::Right => (self.position.0 + 1, self.position.1),
             };
 
+            let mut new_direction = self.facing;
             let (x, y) = new_position;
             if self.grid.get(new_position) == Tile::Void {
-                new_position = match self.facing {
-                    Direction::Up => self.grid.column(x).last().unwrap().0,
-                    Direction::Down => self.grid.column(x).next().unwrap().0,
-                    Direction::Left => self.grid.row(y).last().unwrap().0,
-                    Direction::Right => self.grid.row(y).next().unwrap().0,
+                if let Some(net) = &self.net {
+                    (new_position, new_direction) = net.step(self.position, self.facing);
+                } else {
+                    new_position = match self.facing {
+                        Direction::Up => self.grid.column(x).last().unwrap().0,
+                        Direction::Down => self.grid.column(x).next().unwrap().0,
+                        Direction::Left => self.grid.row(y).last().unwrap().0,
+                        Direction::Right => self.grid.row(y).next().unwrap().0,
+                    }
                 }
             }
 
             match self.grid.get(new_position) {
-                Tile::Open => self.position = new_position,
-                Tile::Wall => return,
-                Tile::Void => panic!("logic error: wrapped around to void"),
-            }
-            println!("moved to {new_position:?}");
-        }
-    }
-}
-
-impl State2 {
-    fn new(cube: Cube) -> Self {
-        Self {
-            cube: cube,
-            face: CubeFace::Top,
-            position: (0, 0),
-            facing: Direction::Right,
-        }
-    }
-
-    fn apply_moves(&mut self, moves: &[Move]) {
-        for mv in moves {
-            self.apply_move(mv);
-        }
-    }
-
-    fn apply_move(&mut self, mv: &Move) {
-        println!(
-            "applying move: {mv:?} from {:?} {:?}",
-            self.position, self.facing
-        );
-        match mv {
-            Move::Step(n) => self.step(*n),
-            Move::Turn(t) => self.facing = self.facing.turn(*t),
-        }
-    }
-
-    fn step(&mut self, n: usize) {
-        for _ in 0..n {
-            let mut new_position = match self.facing {
-                Direction::Up => (self.position.0, self.position.1 - 1),
-                Direction::Down => (self.position.0, self.position.1 + 1),
-                Direction::Left => (self.position.0 - 1, self.position.1),
-                Direction::Right => (self.position.0 + 1, self.position.1),
-            };
-
-            let face: &Face = self.cube.faces.select(self.face);
-
-            let (x, y) = new_position;
-            if face.grid.get(new_position) == Tile::Void {
-
-                // new_position = match self.facing {
-                //     Direction::Up => self.grid.column(x).last().unwrap().0,
-                //     Direction::Down => self.grid.column(x).next().unwrap().0,
-                //     Direction::Left => self.grid.row(y).last().unwrap().0,
-                //     Direction::Right => self.grid.row(y).next().unwrap().0,
-                // }
-            }
-
-            match self.grid.get(new_position) {
-                Tile::Open => self.position = new_position,
+                Tile::Open => {
+                    self.position = new_position;
+                    self.facing = new_direction;
+                }
                 Tile::Wall => return,
                 Tile::Void => panic!("logic error: wrapped around to void"),
             }
@@ -481,25 +535,17 @@ pub fn part1(input: &str) -> Result<String> {
 
     let mut state = State::new(grid);
     state.apply_moves(&moves);
-    println!(
-        "Final location x={} y={} facing={:?}",
-        state.position.0 + 1,
-        state.position.1 + 1,
-        state.facing,
-    );
-    let row = (1 + state.position.1) * 1000;
-    let col = (1 + state.position.0) * 4;
-    let facing_value = match state.facing {
-        Direction::Up => 3,
-        Direction::Down => 1,
-        Direction::Left => 2,
-        Direction::Right => 0,
-    };
-    Ok((row + col + facing_value).to_string())
+    Ok(state.password())
 }
 
-pub fn part2(_input: &str) -> Result<String> {
-    todo!("unimplemented")
+pub fn part2(input: &str) -> Result<String> {
+    let (grid, moves) = parse_input(input)?;
+
+    let net = split_grid(&grid);
+    let mut state = State::new(grid);
+    state.net = Some(net);
+    state.apply_moves(&moves);
+    Ok(state.password())
 }
 
 #[cfg(test)]
@@ -516,12 +562,11 @@ mod test {
     #[test]
     fn test_fold() {
         let (grid, _) = parse_input(INPUT).unwrap();
-        let cube = split_grid(grid);
+        split_grid(&grid);
     }
 
     #[test]
-    #[ignore]
     fn test_part2() {
-        // assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "5031");
     }
 }
