@@ -55,7 +55,7 @@ enum CubeFace {
     Bottom,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Switcheroo {
     RotateRight,
     RotateLeft,
@@ -110,10 +110,20 @@ impl Net {
                 ]
             })
             .collect();
-        println!("new New with edges:");
-        for edge in &edges {
-            println!("  {edge:?}");
+
+        println!("New net with edges:");
+        for (&(face, dir), &(to_face, switch)) in &edges {
+            println!("(CubeFace::{face:?}, Direction::{dir:?}, CubeFace::{to_face:?}, Switcheroo::{switch:?})");
         }
+        // for ((face, dir), &(to_face, switch)) in &edges {
+        //     println!(
+        //         "  (CubeFace::{:?}, Direction::{:?}, CubeFace::{:?}, Switcher::{:?}",
+        //         face,
+        //         dir,
+        //         to_face,
+        //         switch // edge.0 .0, edge.0 .1, edge.1 .0, edge.1 .1
+        //     );
+        // }
         Self {
             dim,
             origins,
@@ -193,17 +203,61 @@ fn split_grid(grid: &Grid) -> Net {
             ],
         ),
         // from my AOC input
-        // Net {
-        //     edges: vec![],
-        //     origins: Cubed {
-        //         top: (1, 0),
-        //         east: (2, 0),
-        //         south: (1, 1),
-        //         bottom: (1, 2),
-        //         west: (0, 2),
-        //         north: (0, 3),
-        //     },
-        // },
+        Net::new(
+            dim,
+            Cubed {
+                top: (1, 0),
+                east: (2, 0),
+                south: (1, 1),
+                bottom: (1, 2),
+                west: (0, 2),
+                north: (0, 3),
+            },
+            &[
+                (
+                    CubeFace::South,
+                    Direction::Right,
+                    CubeFace::East,
+                    Switcheroo::RotateLeft,
+                ),
+                (
+                    CubeFace::South,
+                    Direction::Left,
+                    CubeFace::West,
+                    Switcheroo::RotateLeft,
+                ),
+                (
+                    CubeFace::Top,
+                    Direction::Left,
+                    CubeFace::West,
+                    Switcheroo::Rotate180,
+                ),
+                (
+                    CubeFace::Top,
+                    Direction::Up,
+                    CubeFace::North,
+                    Switcheroo::RotateRight,
+                ),
+                (
+                    CubeFace::Bottom,
+                    Direction::Down,
+                    CubeFace::North,
+                    Switcheroo::RotateRight,
+                ),
+                (
+                    CubeFace::Bottom,
+                    Direction::Right,
+                    CubeFace::East,
+                    Switcheroo::Rotate180,
+                ),
+                (
+                    CubeFace::East,
+                    Direction::Up,
+                    CubeFace::North,
+                    Switcheroo::Rotate180,
+                ),
+            ],
+        ),
     ];
 
     nets.iter()
