@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fmt::{Display, Write},
-    str::FromStr,
-};
+use std::{collections::HashMap, error::Error, str::FromStr};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -43,6 +38,7 @@ struct State {
     position: (i32, i32), // x, y
     facing: Direction,
     net: Option<Net>,
+    history: Vec<((i32, i32), Direction)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -103,27 +99,11 @@ impl Net {
                     ((from, dir), (to, switch)),
                     ((to, reverse_dir), (from, reverse_switch)),
                 ];
-                println!("produced a pair of edges:");
-                println!("  {:?}", &edges[0]);
-                println!("  {:?}", &edges[1]);
 
                 edges
             })
             .collect();
 
-        println!("New net with edges:");
-        for (&(face, dir), &(to_face, switch)) in &edges {
-            println!("(CubeFace::{face:?}, Direction::{dir:?}, CubeFace::{to_face:?}, Switcheroo::{switch:?})");
-        }
-        // for ((face, dir), &(to_face, switch)) in &edges {
-        //     println!(
-        //         "  (CubeFace::{:?}, Direction::{:?}, CubeFace::{:?}, Switcher::{:?}",
-        //         face,
-        //         dir,
-        //         to_face,
-        //         switch // edge.0 .0, edge.0 .1, edge.1 .0, edge.1 .1
-        //     );
-        // }
         Self {
             dim,
             origins,
@@ -267,7 +247,11 @@ fn split_grid(grid: &Grid) -> Net {
 }
 
 impl Net {
-    fn step(&self, position: (i32, i32), direction: Direction) -> ((i32, i32), Direction) {
+    fn step(
+        &self,
+        position: (i32, i32),
+        direction: Direction,
+    ) -> ((i32, i32), Direction, Transform) {
         // what face does it belong to?
         let (face, (local_x, local_y)) = self
             .faces()
@@ -301,8 +285,8 @@ impl Net {
                 (Direction::Down, Transform::Rot180) => (max_dim - local_x, max_dim),
                 (Direction::Down, Transform::Identity) => (local_x, 0),
                 (Direction::Left, Transform::RotRight) => (max_dim, max_dim - local_y),
-                (Direction::Left, Transform::RotLeft) => (0, local_y),
-                (Direction::Left, Transform::Rot180) => (max_dim, max_dim - local_y),
+                (Direction::Left, Transform::RotLeft) => (local_y, 0),
+                (Direction::Left, Transform::Rot180) => (0, max_dim - local_y),
                 (Direction::Left, Transform::Identity) => (max_dim, local_y),
                 (Direction::Right, Transform::RotRight) => (max_dim - local_y, 0),
                 (Direction::Right, Transform::RotLeft) => (local_y, max_dim),
@@ -316,7 +300,7 @@ impl Net {
                 target_position.1 + self.dim * origin.1 as i32,
             );
 
-            (target_position, direction.transform(*transform))
+            (target_position, direction.transform(*transform), *transform)
         } else {
             panic!("stepped into the void from face={face:?} direction={direction:?} position={position:?}");
         }
@@ -392,16 +376,6 @@ impl Direction {
     }
 }
 
-impl Display for Tile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_char(match self {
-            Tile::Void => ' ',
-            Tile::Open => '.',
-            Tile::Wall => '#',
-        })
-    }
-}
-
 impl FromStr for Grid {
     type Err = Box<dyn Error>;
 
@@ -473,15 +447,12 @@ impl Grid {
 impl State {
     fn new(grid: Grid) -> Self {
         let col = grid.rows[0].iter().position(|t| *t == Tile::Open).unwrap() as i32;
-        println!(
-            "State::new detected starting column {col} in {:?}",
-            grid.rows[0]
-        );
         Self {
             grid,
             position: (col, 0),
             facing: Direction::Right,
             net: None,
+            history: vec![((col, 0), Direction::Right)],
         }
     }
 
@@ -510,18 +481,16 @@ impl State {
     }
 
     fn apply_move(&mut self, mv: &Move) {
-        println!(
-            "applying move: {mv:?} from {:?} {:?}",
-            self.position, self.facing
-        );
         match mv {
             Move::Step(n) => self.step(*n),
-            Move::Turn(t) => self.facing = self.facing.turn(*t),
+            Move::Turn(t) => {
+                let new_facing = self.facing.turn(*t);
+                self.facing = new_facing;
+            }
         }
     }
 
     fn step(&mut self, n: usize) {
-        println!("Beginning move: {n} tile {:?}", self.facing);
         for _ in 0..n {
             let mut new_position = match self.facing {
                 Direction::Up => (self.position.0, self.position.1 - 1),
@@ -531,10 +500,13 @@ impl State {
             };
 
             let mut new_direction = self.facing;
+            let mut transform: Option<Transform> = None;
             let (x, y) = new_position;
             if self.grid.get(new_position) == Tile::Void {
                 if let Some(net) = &self.net {
-                    (new_position, new_direction) = net.step(self.position, self.facing);
+                    let step = net.step(self.position, self.facing);
+                    (new_position, new_direction) = (step.0, step.1);
+                    transform.replace(step.2);
                 } else {
                     new_position = match self.facing {
                         Direction::Up => self.grid.column(x).last().unwrap().0,
@@ -547,20 +519,13 @@ impl State {
 
             match self.grid.get(new_position) {
                 Tile::Open => {
-                    println!(
-                        "moved from ({:?} {:?}) to ({new_position:?}, {new_direction:?})",
-                        self.position, self.facing
-                    );
                     self.position = new_position;
                     self.facing = new_direction;
+                    self.history.push((self.position, self.facing));
                 }
-                Tile::Wall => {
-                    println!("Hit a wall - abandoning move");
-                    return;
-                }
+                Tile::Wall => return,
                 Tile::Void => panic!("logic error: wrapped around to void"),
             }
-            // println!("moved to {new_position:?}");
         }
     }
 }
