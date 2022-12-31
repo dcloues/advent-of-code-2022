@@ -56,20 +56,11 @@ enum CubeFace {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Switcheroo {
-    RotateRight,
-    RotateLeft,
-    Rotate180,
-}
-
-impl Switcheroo {
-    fn invert(self) -> Self {
-        match self {
-            Switcheroo::RotateRight => Self::RotateLeft,
-            Switcheroo::RotateLeft => Self::RotateRight,
-            Switcheroo::Rotate180 => Self::Rotate180,
-        }
-    }
+enum Transform {
+    RotRight,
+    RotLeft,
+    Rot180,
+    Identity,
 }
 
 impl<T: Clone> Cubed<T> {
@@ -86,12 +77,12 @@ impl<T: Clone> Cubed<T> {
 }
 
 type NetOrigin = (usize, usize);
-type Edge = (CubeFace, Direction, CubeFace, Switcheroo);
+type Edge = (CubeFace, Direction, CubeFace, Transform);
 
 #[derive(Clone)]
 struct Net {
     origins: Cubed<NetOrigin>,
-    edges: HashMap<(CubeFace, Direction), (CubeFace, Switcheroo)>,
+    edges: HashMap<(CubeFace, Direction), (CubeFace, Transform)>,
     dim: i32,
 }
 
@@ -101,13 +92,22 @@ impl Net {
             .iter()
             .cloned()
             .flat_map(|(from, dir, to, switch)| {
-                [
+                let (reverse_dir, reverse_switch) = match switch {
+                    Transform::RotRight => (dir.turn_left(), Transform::RotLeft),
+                    Transform::RotLeft => (dir.turn_right(), Transform::RotRight),
+                    Transform::Rot180 => (dir, Transform::Rot180),
+                    Transform::Identity => (dir.turn_right().turn_right(), Transform::Identity),
+                };
+
+                let edges = [
                     ((from, dir), (to, switch)),
-                    (
-                        (to, dir.transform(switch.invert())),
-                        (from, switch.invert()),
-                    ),
-                ]
+                    ((to, reverse_dir), (from, reverse_switch)),
+                ];
+                println!("produced a pair of edges:");
+                println!("  {:?}", &edges[0]);
+                println!("  {:?}", &edges[1]);
+
+                edges
             })
             .collect();
 
@@ -162,43 +162,43 @@ fn split_grid(grid: &Grid) -> Net {
                     CubeFace::Top,
                     Direction::Left,
                     CubeFace::West,
-                    Switcheroo::RotateLeft,
+                    Transform::RotLeft,
                 ),
                 (
                     CubeFace::Top,
                     Direction::Up,
                     CubeFace::North,
-                    Switcheroo::Rotate180,
+                    Transform::Rot180,
                 ),
                 (
                     CubeFace::Top,
                     Direction::Right,
                     CubeFace::East,
-                    Switcheroo::Rotate180,
+                    Transform::Rot180,
                 ),
                 (
                     CubeFace::South,
                     Direction::Right,
                     CubeFace::East,
-                    Switcheroo::RotateRight,
+                    Transform::RotRight,
                 ),
                 (
                     CubeFace::Bottom,
                     Direction::Down,
                     CubeFace::North,
-                    Switcheroo::Rotate180,
+                    Transform::Rot180,
                 ),
                 (
                     CubeFace::Bottom,
                     Direction::Left,
                     CubeFace::West,
-                    Switcheroo::RotateRight,
+                    Transform::RotRight,
                 ),
                 (
                     CubeFace::North,
                     Direction::Left,
                     CubeFace::East,
-                    Switcheroo::RotateRight,
+                    Transform::RotRight,
                 ),
             ],
         ),
@@ -218,43 +218,43 @@ fn split_grid(grid: &Grid) -> Net {
                     CubeFace::South,
                     Direction::Right,
                     CubeFace::East,
-                    Switcheroo::RotateLeft,
+                    Transform::RotLeft,
                 ),
                 (
                     CubeFace::South,
                     Direction::Left,
                     CubeFace::West,
-                    Switcheroo::RotateLeft,
+                    Transform::RotLeft,
                 ),
                 (
                     CubeFace::Top,
                     Direction::Left,
                     CubeFace::West,
-                    Switcheroo::Rotate180,
+                    Transform::Rot180,
                 ),
                 (
                     CubeFace::Top,
                     Direction::Up,
                     CubeFace::North,
-                    Switcheroo::RotateRight,
+                    Transform::RotRight,
                 ),
                 (
                     CubeFace::Bottom,
                     Direction::Down,
                     CubeFace::North,
-                    Switcheroo::RotateRight,
+                    Transform::RotRight,
                 ),
                 (
                     CubeFace::Bottom,
                     Direction::Right,
                     CubeFace::East,
-                    Switcheroo::Rotate180,
+                    Transform::Rot180,
                 ),
                 (
                     CubeFace::East,
                     Direction::Up,
                     CubeFace::North,
-                    Switcheroo::Rotate180,
+                    Transform::Identity,
                 ),
             ],
         ),
@@ -292,21 +292,24 @@ impl Net {
         let max_dim = self.dim - 1;
         if let Some((to_face, transform)) = self.edges.get(&(face, direction)) {
             let target_position = match (direction, transform) {
-                (Direction::Up, Switcheroo::RotateRight) => (0, local_x),
-                (Direction::Up, Switcheroo::RotateLeft) => (max_dim, max_dim - local_x),
-                (Direction::Up, Switcheroo::Rotate180) => (max_dim - local_x, 0),
-                (Direction::Down, Switcheroo::RotateRight) => (max_dim, local_x),
-                (Direction::Down, Switcheroo::RotateLeft) => (0, max_dim - local_x),
-                (Direction::Down, Switcheroo::Rotate180) => (max_dim - local_x, max_dim),
-                (Direction::Left, Switcheroo::RotateRight) => (max_dim, max_dim - local_y),
-                (Direction::Left, Switcheroo::RotateLeft) => (0, local_y),
-                (Direction::Left, Switcheroo::Rotate180) => (max_dim, max_dim - local_y),
-                (Direction::Right, Switcheroo::RotateRight) => (max_dim - local_y, 0),
-                (Direction::Right, Switcheroo::RotateLeft) => (local_y, max_dim),
-                (Direction::Right, Switcheroo::Rotate180) => (max_dim, max_dim - local_y),
+                (Direction::Up, Transform::RotRight) => (0, local_x),
+                (Direction::Up, Transform::RotLeft) => (max_dim, max_dim - local_x),
+                (Direction::Up, Transform::Rot180) => (max_dim - local_x, 0),
+                (Direction::Up, Transform::Identity) => (local_x, max_dim),
+                (Direction::Down, Transform::RotRight) => (max_dim, local_x),
+                (Direction::Down, Transform::RotLeft) => (0, max_dim - local_x),
+                (Direction::Down, Transform::Rot180) => (max_dim - local_x, max_dim),
+                (Direction::Down, Transform::Identity) => (local_x, 0),
+                (Direction::Left, Transform::RotRight) => (max_dim, max_dim - local_y),
+                (Direction::Left, Transform::RotLeft) => (0, local_y),
+                (Direction::Left, Transform::Rot180) => (max_dim, max_dim - local_y),
+                (Direction::Left, Transform::Identity) => (max_dim, local_y),
+                (Direction::Right, Transform::RotRight) => (max_dim - local_y, 0),
+                (Direction::Right, Transform::RotLeft) => (local_y, max_dim),
+                (Direction::Right, Transform::Rot180) => (max_dim, max_dim - local_y),
+                (Direction::Right, Transform::Identity) => (0, local_y),
             };
 
-            println!("moved from {face:?} ({local_x},{local_y}) to {to_face:?} {target_position:?} via {transform:?}");
             let origin = self.origins.select(*to_face);
             let target_position = (
                 target_position.0 + self.dim * origin.0 as i32,
@@ -354,15 +357,12 @@ impl Net {
 }
 
 impl Direction {
-    fn invert(self) -> Self {
-        self.turn_right().turn_right()
-    }
-
-    fn transform(self, transform: Switcheroo) -> Self {
+    fn transform(self, transform: Transform) -> Self {
         match transform {
-            Switcheroo::RotateRight => self.turn_right(),
-            Switcheroo::RotateLeft => self.turn_left(),
-            Switcheroo::Rotate180 => self.invert(),
+            Transform::RotRight => self.turn_right(),
+            Transform::RotLeft => self.turn_left(),
+            Transform::Rot180 => self.turn_right().turn_right(),
+            Transform::Identity => self,
         }
     }
 
@@ -521,6 +521,7 @@ impl State {
     }
 
     fn step(&mut self, n: usize) {
+        println!("Beginning move: {n} tile {:?}", self.facing);
         for _ in 0..n {
             let mut new_position = match self.facing {
                 Direction::Up => (self.position.0, self.position.1 - 1),
@@ -546,13 +547,20 @@ impl State {
 
             match self.grid.get(new_position) {
                 Tile::Open => {
+                    println!(
+                        "moved from ({:?} {:?}) to ({new_position:?}, {new_direction:?})",
+                        self.position, self.facing
+                    );
                     self.position = new_position;
                     self.facing = new_direction;
                 }
-                Tile::Wall => return,
+                Tile::Wall => {
+                    println!("Hit a wall - abandoning move");
+                    return;
+                }
                 Tile::Void => panic!("logic error: wrapped around to void"),
             }
-            println!("moved to {new_position:?}");
+            // println!("moved to {new_position:?}");
         }
     }
 }
