@@ -142,16 +142,36 @@ impl Field {
         }
     }
 
-    fn has_neighbors(&self, elf: Point) -> bool {
-        elf.neighbors().iter().any(|n| self.elves.contains(n))
+    fn step_until_done(&mut self) -> i32 {
+        let mut moves = VecDeque::from(TRY_MOVES);
+
+        for i in 1..=i32::MAX {
+            if 0 == self.step(&moves) {
+                return i;
+            }
+            moves.rotate_left(1);
+        }
+
+        unreachable!("the previous loop should always run")
     }
 
-    fn step(&mut self, moves: &VecDeque<TryMove>) {
-        self.elves = self
-            .elves
-            .iter()
-            .map(|elf| self.move_elf(*elf, &moves))
-            .collect();
+    fn step(&mut self, moves: &VecDeque<TryMove>) -> i32 {
+        let mut elves: HashSet<Point> = HashSet::new();
+        let mut n_moved = 0;
+        for elf in &self.elves {
+            let new_elf = self.move_elf(*elf, &moves);
+            elves.insert(new_elf);
+            if *elf != new_elf {
+                n_moved += 1;
+            }
+        }
+
+        self.elves = elves;
+        n_moved
+    }
+
+    fn has_neighbors(&self, elf: Point) -> bool {
+        elf.neighbors().iter().any(|n| self.elves.contains(n))
     }
 
     fn move_elf(&self, elf: Point, moves: &VecDeque<TryMove>) -> Point {
@@ -258,8 +278,11 @@ pub fn part1(input: &str) -> Result<String> {
     Ok(field.find_free_area().to_string())
 }
 
-pub fn part2(_input: &str) -> Result<String> {
-    todo!("unimplemented")
+pub fn part2(input: &str) -> Result<String> {
+    let mut field: Field = input.parse()?;
+    let steps = field.step_until_done();
+
+    Ok(steps.to_string())
 }
 
 #[cfg(test)]
@@ -348,8 +371,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_part2() {
-        assert_eq!(part2(INPUT).unwrap(), "")
+        assert_eq!(part2(INPUT).unwrap(), "20")
     }
 }
